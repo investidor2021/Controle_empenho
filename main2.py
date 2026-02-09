@@ -76,39 +76,8 @@ def conectar_sheets():
 def carregar_empenhos():
     ws = conectar_sheets()
     df = pd.DataFrame(ws.get_all_records())
-    
-    # Corrigir valores monetários que vêm multiplicados por 10 do Google Sheets
-    # Identificar colunas que provavelmente contêm valores monetários
-    colunas_monetarias = []
-    for col in df.columns:
-        col_lower = col.lower()
-        
-        # Excluir colunas que são claramente identificadores, não valores
-        # Ex: "Empenho", "Nº Empenho", "Código", etc.
-        if any(palavra in col_lower for palavra in ['nº', 'numero', 'número', 'codigo', 'código', 'cod.']):
-            continue
-        
-        # Se a coluna se chama apenas "empenho" ou variações, provavelmente é o número, não o valor
-        if col_lower.strip() in ['empenho', 'emp', 'emp.', 'n empenho', 'nº empenho']:
-            continue
-            
-        # Procurar por colunas que contenham palavras relacionadas a valores monetários
-        if any(palavra in col_lower for palavra in ['saldo', 'valor', 'pagar', 'liquidado', 'pago', 'empenhado', 'anulado']):
-            # Verificar se a coluna contém valores numéricos
-            if df[col].dtype in ['int64', 'float64'] or pd.api.types.is_numeric_dtype(df[col]):
-                colunas_monetarias.append(col)
-    
-    # Dividir por 10 as colunas monetárias identificadas
-    for col in colunas_monetarias:
-        try:
-            # Converter para numérico se ainda não for
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-            # Dividir por 10 apenas valores não-nulos
-            df[col] = df[col].apply(lambda x: x / 10 if pd.notna(x) and x != 0 else x)
-        except Exception as e:
-            st.warning(f"Não foi possível corrigir valores na coluna {col}: {e}")
-    
     return df
+
 
 
 def format_currency(val):
