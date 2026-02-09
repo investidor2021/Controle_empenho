@@ -1,0 +1,8 @@
+# Excluir credenciais e segredos
+credenciais.json
+.env
+*.pem
+
+# Excluir caches do Python
+__pycache__/
+*.pyc
