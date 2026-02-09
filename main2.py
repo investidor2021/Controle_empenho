@@ -75,8 +75,25 @@ def conectar_sheets():
 @st.cache_data(ttl=60) # Cache por 60 segundos para evitar recarregar toda hora
 def carregar_empenhos():
     ws = conectar_sheets()
-    df = pd.DataFrame(ws.get_all_records())
-    return df
+    if ws is None:
+        st.error("Erro ao conectar com o Google Sheets")
+        return pd.DataFrame()
+    
+    try:
+        dados = ws.get_all_records()
+        df = pd.DataFrame(dados)
+        
+        # Debug: mostrar informações sobre os dados carregados
+        if df.empty:
+            st.warning(f"⚠️ A planilha do Google Sheets está vazia. Total de linhas: {len(ws.get_all_values())}")
+        else:
+            st.info(f"✅ Dados carregados: {len(df)} registros, {len(df.columns)} colunas")
+        
+        return df
+    except Exception as e:
+        st.error(f"Erro ao carregar dados do Google Sheets: {e}")
+        return pd.DataFrame()
+
 
 
 
@@ -221,6 +238,10 @@ if modo == "Organizador de Planilhas":
                                 cols_order.append(c)
                                 
                         df_final = df_final[cols_order]
+
+                        # Debug: mostrar o que será salvo
+                        st.info(f"📤 Salvando no Google Sheets: {len(df_final)} registros, {len(df_final.columns)} colunas")
+                        st.write("Colunas:", list(df_final.columns))
 
                         ws.clear()
                         ws.update([df_final.columns.values.tolist()] + df_final.values.tolist())
