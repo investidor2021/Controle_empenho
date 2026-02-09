@@ -88,6 +88,16 @@ def carregar_empenhos():
             st.warning(f"⚠️ A planilha do Google Sheets está vazia. Total de linhas: {len(ws.get_all_values())}")
         else:
             st.info(f"✅ Dados carregados: {len(df)} registros, {len(df.columns)} colunas")
+            
+            # Debug detalhado: mostrar uma amostra dos dados
+            with st.expander("🔍 Debug: Ver dados brutos do Google Sheets"):
+                st.write("**Colunas:**", list(df.columns))
+                st.write("**Primeiras 3 linhas:**")
+                st.dataframe(df.head(3))
+                
+                # Mostrar tipos de dados das colunas
+                st.write("**Tipos de dados:**")
+                st.write(df.dtypes)
         
         return df
     except Exception as e:
@@ -360,7 +370,11 @@ if st.session_state.usuario: # Só mostra se estiver logado
     
     # 1. Filtro de Departamento (Já existente)
     if departamento_selecionado != "Todos":
-        df = df[df["Departamento (De/Para)"] == departamento_selecionado]
+        # Verificar se a coluna existe antes de filtrar
+        if "Departamento (De/Para)" in df.columns:
+            df = df[df["Departamento (De/Para)"] == departamento_selecionado]
+        else:
+            st.warning("⚠️ A coluna 'Departamento (De/Para)' não foi encontrada. Faça upload da planilha pelo 'Organizador de Planilhas' primeiro.")
 
     # Detectar colunas para evitar KeyError (necessário antes de filtrar por elas)
     col_emissao = next((c for c in df.columns if any(x in c.lower() for x in ["emissao", "emissão", "data"])), None)
