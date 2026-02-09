@@ -75,17 +75,50 @@ def conectar_sheets():
 @st.cache_data(ttl=60) # Cache por 60 segundos para evitar recarregar toda hora
 def carregar_empenhos():
     ws = conectar_sheets()
-    return pd.DataFrame(ws.get_all_records())
+    df = pd.DataFrame(ws.get_all_records())
+    
+    # Corrigir valores monetários que vêm multiplicados por 10 do Google Sheets
+    # Identificar colunas que provavelmente contêm valores monetários
+    colunas_monetarias = []
+    for col in df.columns:
+        col_lower = col.lower()
+        # Procurar por colunas que contenham palavras relacionadas a valores monetários
+        if any(palavra in col_lower for palavra in ['saldo', 'valor', 'pagar', 'empenho', 'liquidado', 'pago']):
+            # Verificar se a coluna contém valores numéricos
+            if df[col].dtype in ['int64', 'float64'] or pd.api.types.is_numeric_dtype(df[col]):
+                colunas_monetarias.append(col)
+    
+    # Dividir por 10 as colunas monetárias identificadas
+    for col in colunas_monetarias:
+        try:
+            # Converter para numérico se ainda não for
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+            # Dividir por 10 apenas valores não-nulos
+            df[col] = df[col].apply(lambda x: x / 10 if pd.notna(x) and x != 0 else x)
+        except Exception as e:
+            st.warning(f"Não foi possível corrigir valores na coluna {col}: {e}")
+    
+    return df
+
 
 def format_currency(val):
     try:
         if isinstance(val, (int, float)):
             return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        val_str = str(val).replace("R$", "").replace(".", "").replace(",", ".").strip()
+        
+        # Handle string values with Brazilian format
+        val_str = str(val).replace("R$", "").strip()
+        
+        # If it contains comma, assume Brazilian format (1.234,56)
+        if "," in val_str:
+            # Remove thousand separators (dots) and replace comma with dot
+            val_str = val_str.replace(".", "").replace(",", ".")
+        
         val_float = float(val_str)
         return f"R$ {val_float:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except:
         return str(val)
+
 
     
 def salvar_observacao(empenho, key):
