@@ -117,24 +117,41 @@ def format_currency(val):
         if val_str.startswith("R$"):
             return val_str
         
-        # Se está vazio ou é zero
-        if not val_str or val_str == "0" or val_str == "":
+        # Se está vazio
+        if not val_str or val_str == "":
             return "R$ 0,00"
         
         # Se é um número (int ou float), formata
         if isinstance(val, (int, float)):
             return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         
-        # Se já está formatado como string brasileira, apenas adiciona R$
-        # Verifica se tem vírgula (indicador de formato brasileiro)
-        if "," in val_str or "." in val_str:
+        # Tentar converter string para float e formatar
+        # Google Sheets retorna valores como "18.50051" (string com ponto decimal)
+        try:
+            # Remove espaços e tenta converter
+            val_clean = val_str.replace(" ", "")
+            
+            # Se tem vírgula E ponto, é formato brasileiro (1.234,56)
+            if "," in val_clean and "." in val_clean:
+                # Remove pontos (separador de milhar) e troca vírgula por ponto
+                val_clean = val_clean.replace(".", "").replace(",", ".")
+                val_float = float(val_clean)
+            # Se tem apenas vírgula, é formato brasileiro sem milhar (123,45)
+            elif "," in val_clean and "." not in val_clean:
+                val_clean = val_clean.replace(",", ".")
+                val_float = float(val_clean)
+            # Se tem apenas ponto ou nenhum separador, é formato americano ou número simples
+            else:
+                val_float = float(val_clean)
+            
+            # Formatar no padrão brasileiro
+            return f"R$ {val_float:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        except ValueError:
+            # Se não conseguir converter, retorna como está
             return f"R$ {val_str}"
-        
-        # Caso contrário, tenta converter e formatar
-        val_float = float(val_str)
-        return f"R$ {val_float:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except:
         return str(val)
+
 
 
 
