@@ -126,6 +126,11 @@ def organize_sheet(file):
             # Pular colunas que não são monetárias
             if any(palavra in col_lower for palavra in ['data', 'prazo', 'status', 'departamento', 'observa']):
                 continue
+            
+            # Pular colunas que são identificadores (números inteiros, não valores monetários)
+            # Ex: Número do Empenho, Código do Fornecedor
+            if any(palavra in col_lower for palavra in ['empenho', 'emp.', 'emp', 'código', 'codigo', 'cod.', 'nº', 'numero', 'número']):
+                continue
                 
             # Verificar se é uma coluna numérica que provavelmente contém valores monetários
             if pd.api.types.is_numeric_dtype(result_df[col]):
@@ -139,6 +144,7 @@ def organize_sheet(file):
                     )
                 except Exception:
                     pass  # Se der erro, mantém o valor original
+
 
         if "Observação" not in result_df.columns:
             # Garantir coluna Observação
