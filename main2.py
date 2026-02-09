@@ -82,8 +82,18 @@ def carregar_empenhos():
     colunas_monetarias = []
     for col in df.columns:
         col_lower = col.lower()
+        
+        # Excluir colunas que são claramente identificadores, não valores
+        # Ex: "Empenho", "Nº Empenho", "Código", etc.
+        if any(palavra in col_lower for palavra in ['nº', 'numero', 'número', 'codigo', 'código', 'cod.']):
+            continue
+        
+        # Se a coluna se chama apenas "empenho" ou variações, provavelmente é o número, não o valor
+        if col_lower.strip() in ['empenho', 'emp', 'emp.', 'n empenho', 'nº empenho']:
+            continue
+            
         # Procurar por colunas que contenham palavras relacionadas a valores monetários
-        if any(palavra in col_lower for palavra in ['saldo', 'valor', 'pagar', 'empenho', 'liquidado', 'pago']):
+        if any(palavra in col_lower for palavra in ['saldo', 'valor', 'pagar', 'liquidado', 'pago', 'empenhado', 'anulado']):
             # Verificar se a coluna contém valores numéricos
             if df[col].dtype in ['int64', 'float64'] or pd.api.types.is_numeric_dtype(df[col]):
                 colunas_monetarias.append(col)
