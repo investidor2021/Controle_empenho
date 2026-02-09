@@ -99,21 +99,33 @@ def carregar_empenhos():
 
 def format_currency(val):
     try:
+        # Se já é uma string formatada no padrão brasileiro (ex: "18.500,51")
+        # apenas adiciona o prefixo R$
+        val_str = str(val).strip()
+        
+        # Se já tem R$, retorna como está
+        if val_str.startswith("R$"):
+            return val_str
+        
+        # Se está vazio ou é zero
+        if not val_str or val_str == "0" or val_str == "":
+            return "R$ 0,00"
+        
+        # Se é um número (int ou float), formata
         if isinstance(val, (int, float)):
             return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         
-        # Handle string values with Brazilian format
-        val_str = str(val).replace("R$", "").strip()
+        # Se já está formatado como string brasileira, apenas adiciona R$
+        # Verifica se tem vírgula (indicador de formato brasileiro)
+        if "," in val_str or "." in val_str:
+            return f"R$ {val_str}"
         
-        # If it contains comma, assume Brazilian format (1.234,56)
-        if "," in val_str:
-            # Remove thousand separators (dots) and replace comma with dot
-            val_str = val_str.replace(".", "").replace(",", ".")
-        
+        # Caso contrário, tenta converter e formatar
         val_float = float(val_str)
         return f"R$ {val_float:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except:
         return str(val)
+
 
 
     
