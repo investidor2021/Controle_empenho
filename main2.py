@@ -520,21 +520,41 @@ if st.session_state.usuario: # Só mostra se estiver logado
     
     with col1:
         st.metric("Total de Empenhos", total_empenhos)
+        if st.button("📋 Ver Todos", key="btn_todos", use_container_width=True):
+            st.session_state["filtro_status"] = "Todos"
+            st.rerun()
     
     with col2:
         st.metric("🔴 Vencidos", qtd_vencidos, 
                   delta=f"R$ {valor_vencidos:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_vencidos > 0 else None,
                   delta_color="inverse")
+        if st.button("🔍 Filtrar", key="btn_vencidos", use_container_width=True, disabled=qtd_vencidos == 0):
+            st.session_state["filtro_status"] = "Vencido"
+            st.rerun()
     
     with col3:
         st.metric("⚠️ A Vencer (≤5 dias)", qtd_a_vencer,
                   delta=f"R$ {valor_a_vencer:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_a_vencer > 0 else None,
                   delta_color="off")
+        if st.button("🔍 Filtrar", key="btn_a_vencer", use_container_width=True, disabled=qtd_a_vencer == 0):
+            st.session_state["filtro_status"] = "Vence em"
+            st.rerun()
     
     with col4:
         st.metric("✅ No Prazo", qtd_no_prazo,
                   delta=f"R$ {valor_no_prazo:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_no_prazo > 0 else None,
                   delta_color="normal")
+        if st.button("🔍 Filtrar", key="btn_no_prazo", use_container_width=True, disabled=qtd_no_prazo == 0):
+            st.session_state["filtro_status"] = "No Prazo"
+            st.rerun()
+    
+    # Aplicar filtro de status se houver
+    if "filtro_status" in st.session_state and st.session_state["filtro_status"] != "Todos":
+        filtro = st.session_state["filtro_status"]
+        if col_status:
+            df_original_count = len(df)
+            df = df[df[col_status].str.contains(filtro, case=False, na=False)]
+            st.info(f"🔍 Filtrando por: **{filtro}** ({len(df)} de {df_original_count} registros)")
     
     # ---------------------------
     # ALERTAS DE PRAZO
