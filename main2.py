@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import uuid
 import io
+import time
 import gspread
 from google.oauth2.service_account import Credentials
 import data_processor
@@ -163,17 +164,28 @@ def salvar_observacao(empenho, key):
     # Se não achar "Observação" exata, tenta criar ou usar a última?
     # O data_processor garante que cria "Observação", então deve existir.
     col_obs_idx = next((i for i, c in enumerate(cabecalho) if "observação" in c.lower() or "observacao" in c.lower()), -1)
-
+    
     if col_empenho_idx == -1 or col_obs_idx == -1:
-        st.error("Erro ao salvar: colunas não identificadas na planilha.")
+        st.error("Não foi possível encontrar as colunas necessárias.")
         return
-
-    # Iterar manualmente e atualizar (gspread update_cell usa índice 1-based)
-    # Linha 1 é cabeçalho, dados começam na 2.
-    for i, r in enumerate(registros, start=2):
-        if str(r[cabecalho[col_empenho_idx]]) == str(empenho):
-            ws.update_cell(i, col_obs_idx + 1, novo_texto)
-            break    
+    
+    # Procurar linha do empenho
+    for idx, reg in enumerate(registros):
+        if str(reg.get(cabecalho[col_empenho_idx])) == str(empenho):
+            row_number = idx + 2  # +1 para base 1, +1 para pular cabeçalho
+            # col_letter_obs = chr(65 + col_obs_idx)  # Converter índice para letra (A, B, C...) # Not used
+            
+            # Adicionar timestamp à observação
+            timestamp = pd.Timestamp.now().strftime("%d/%m/%Y %H:%M")
+            texto_com_timestamp = f"{novo_texto}\n[Atualizado em: {timestamp}]" if novo_texto.strip() else ""
+            
+            ws.update_cell(row_number, col_obs_idx + 1, texto_com_timestamp)
+            st.success(f"Observação salva para empenho {empenho}!")
+            time.sleep(1)
+            st.rerun()
+            return
+    
+    st.error(f"Empenho {empenho} não encontrado.")
 
 
 # ===============================
@@ -434,6 +446,150 @@ if st.session_state.usuario: # Só mostra se estiver logado
         except Exception as e:
             st.sidebar.warning(f"Não foi possível filtrar por data: {e}")
 
+    # ---------------------------
+    # ORDENAÇÃO POR PRIORIDADE
+    # ---------------------------
+    
+    # Criar coluna auxiliar para ordenação por prioridade
+    def get_priority(status):
+        """Retorna prioridade numérica para ordenação (menor = mais urgente)"""
+        if pd.isna(status) or status == "":
+            return 999
+        status_str = str(status).lower()
+        if "vencido" in status_str:
+            return 1  # Mais urgente
+        elif "vence em" in status_str:
+            # Extrair número de dias
+            try:
+                dias = int(''.join(filter(str.isdigit, status_str)))
+                return 10 + dias  # 10-15 para "vence em 0-5 dias"
+            except:
+                return 20
+        elif "no prazo" in status_str:
+            return 100  # Menos urgente
+        else:
+            return 200
+    
+    df["_prioridade"] = df[col_status].apply(get_priority) if col_status else 999
+    
+    # Ordenar: primeiro por prioridade, depois por número de empenho
+    if col_empenho and "_prioridade" in df.columns:
+        df = df.sort_values(["_prioridade", col_empenho], ascending=[True, True])
+        df = df.drop(columns=["_prioridade"])  # Remover coluna auxiliar
+    
+    # ---------------------------
+    # DASHBOARD DE RESUMO
+    # ---------------------------
+    
+    st.markdown("### 📊 Resumo Geral")
+    
+    # Calcular estatísticas
+    total_empenhos = len(df)
+    
+    vencidos = df[df[col_status].str.contains("Vencido", case=False, na=False)] if col_status else pd.DataFrame()
+    a_vencer = df[df[col_status].str.contains("Vence em", case=False, na=False)] if col_status else pd.DataFrame()
+    no_prazo = df[df[col_status].str.contains("No Prazo", case=False, na=False)] if col_status else pd.DataFrame()
+    
+    qtd_vencidos = len(vencidos)
+    qtd_a_vencer = len(a_vencer)
+    qtd_no_prazo = len(no_prazo)
+    
+    # Calcular valores totais (se houver coluna de saldo)
+    if col_saldo:
+        def extract_value(val):
+            """Extrai valor numérico de string formatada ou número"""
+            if pd.isna(val):
+                return 0
+            if isinstance(val, (int, float)):
+                return float(val)
+            # Se é string, tentar converter
+            try:
+                val_str = str(val).replace("R$", "").replace(".", "").replace(",", ".").strip()
+                return float(val_str)
+            except:
+                return 0
+        
+        valor_vencidos = vencidos[col_saldo].apply(extract_value).sum() if len(vencidos) > 0 else 0
+        valor_a_vencer = a_vencer[col_saldo].apply(extract_value).sum() if len(a_vencer) > 0 else 0
+        valor_no_prazo = no_prazo[col_saldo].apply(extract_value).sum() if len(no_prazo) > 0 else 0
+    else:
+        valor_vencidos = valor_a_vencer = valor_no_prazo = 0
+    
+    # Exibir cards de resumo
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Total de Empenhos", total_empenhos)
+    
+    with col2:
+        st.metric("🔴 Vencidos", qtd_vencidos, 
+                  delta=f"R$ {valor_vencidos:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_vencidos > 0 else None,
+                  delta_color="inverse")
+    
+    with col3:
+        st.metric("⚠️ A Vencer (≤5 dias)", qtd_a_vencer,
+                  delta=f"R$ {valor_a_vencer:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_a_vencer > 0 else None,
+                  delta_color="off")
+    
+    with col4:
+        st.metric("✅ No Prazo", qtd_no_prazo,
+                  delta=f"R$ {valor_no_prazo:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_no_prazo > 0 else None,
+                  delta_color="normal")
+    
+    # ---------------------------
+    # ALERTAS DE PRAZO
+    # ---------------------------
+    
+    if qtd_vencidos > 0 or qtd_a_vencer > 0:
+        st.markdown("---")
+        if qtd_vencidos > 0 and qtd_a_vencer > 0:
+            st.error(f"⚠️ **ATENÇÃO:** {qtd_vencidos} empenho(s) vencido(s) e {qtd_a_vencer} vencendo em até 5 dias!")
+        elif qtd_vencidos > 0:
+            st.error(f"🔴 **ATENÇÃO:** {qtd_vencidos} empenho(s) vencido(s)!")
+        else:
+            st.warning(f"⚠️ **ATENÇÃO:** {qtd_a_vencer} empenho(s) vencendo em até 5 dias!")
+    
+    st.markdown("---")
+    
+    # ---------------------------
+    # EXPORTAÇÃO PARA EXCEL
+    # ---------------------------
+    
+    # Botão de exportação
+    col_export1, col_export2 = st.columns([3, 1])
+    
+    with col_export2:
+        if st.button("📥 Exportar para Excel", use_container_width=True):
+            # Preparar dados para exportação
+            df_export = df.copy()
+            
+            # Formatar valores monetários para Excel
+            if col_saldo:
+                df_export[col_saldo] = df_export[col_saldo].apply(extract_value)
+            
+            # Criar arquivo Excel em memória
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df_export.to_excel(writer, index=False, sheet_name='Empenhos')
+            
+            output.seek(0)
+            
+            # Botão de download
+            st.download_button(
+                label="⬇️ Baixar Arquivo",
+                data=output,
+                file_name=f"empenhos_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+    
+    st.markdown("---")
+    
+    # ---------------------------
+    # TABELA COM DESTAQUE VISUAL
+    # ---------------------------
+    
+    st.markdown("### 📋 Lista de Empenhos")
+    
     # PAGINAÇÃO
     total_items = len(df)
     items_per_page = 50
