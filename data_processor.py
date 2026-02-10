@@ -55,9 +55,10 @@ def organize_sheet(file):
     try:
         # Load data
         if file.name.endswith('.csv'):
-            df = pd.read_csv(file)
+            df = pd.read_csv(file, dtype=str)  # Ler como string para não perder formatação
         else:
-            df = pd.read_excel(file)
+            # Ler Excel como strings para preservar formatação brasileira (vírgula decimal)
+            df = pd.read_excel(file, dtype=str, engine='openpyxl')
         
         # Define target columns by Excel letter (0-indexed)
         # D=3, F=5, H=7, J=9, K=10, W=22, AJ=35
@@ -78,10 +79,16 @@ def organize_sheet(file):
         # CRÍTICO: Converter valores com vírgula decimal (formato brasileiro) para float
         # O Excel salva valores como "18500,51" ou "13412,43" (strings com vírgula decimal)
         # Precisamos converter vírgula para ponto ANTES de converter para float
+        
+        # Lista para debug
+        debug_conversions = []
+        
         def convert_brazilian_decimal(val):
             """Converte valores do formato brasileiro (vírgula) para float"""
             if pd.isna(val):
                 return val
+            
+            original_val = val  # Guardar para debug
             
             # Se já é número, retorna como está
             if isinstance(val, (int, float)):
@@ -103,7 +110,11 @@ def organize_sheet(file):
                         val_clean = val_clean.replace(',', '.')
                     
                     try:
-                        return float(val_clean)
+                        result = float(val_clean)
+                        # Debug: registrar conversões de valores monetários
+                        if result > 100:  # Provavelmente valor monetário
+                            debug_conversions.append(f"{original_val} → {result}")
+                        return result
                     except ValueError:
                         return val  # Se não conseguir converter, retorna original
             
@@ -112,6 +123,12 @@ def organize_sheet(file):
         # Aplicar conversão em todas as colunas
         for col in result_df.columns:
             result_df[col] = result_df[col].apply(convert_brazilian_decimal)
+        
+        # Mostrar conversões realizadas
+        if debug_conversions:
+            print("🔍 DEBUG - Conversões realizadas:")
+            for conv in debug_conversions[:10]:  # Mostrar primeiras 10
+                print(f"  {conv}")
         
         # Insert "De/Para" (Department) after Column D (which is now at index 0 in result_df)
         # Column D is at result_df.columns[0]
