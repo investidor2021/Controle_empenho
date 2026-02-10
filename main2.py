@@ -109,8 +109,6 @@ def carregar_empenhos():
 
 def format_currency(val):
     try:
-        # Se já é uma string formatada no padrão brasileiro (ex: "18.500,51")
-        # apenas adiciona o prefixo R$
         val_str = str(val).strip()
         
         # Se já tem R$, retorna como está
@@ -121,47 +119,25 @@ def format_currency(val):
         if not val_str or val_str == "":
             return "R$ 0,00"
         
-        # Se é um número (int ou float), formata
+        # Converter para float e formatar no padrão brasileiro
         if isinstance(val, (int, float)):
-            return f"R$ {val:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        
-        # Tentar converter string para float e formatar
-        # Google Sheets retorna valores como "18.50051" (string com ponto decimal)
-        try:
-            # Remove espaços e tenta converter
-            val_clean = val_str.replace(" ", "")
+            val_float = float(val)
+        else:
+            # Tentar converter string para float
+            # Remover possíveis formatações
+            val_clean = val_str.replace(" ", "").replace("R$", "")
             
             # Se tem vírgula E ponto, é formato brasileiro (1.234,56)
             if "," in val_clean and "." in val_clean:
-                # Remove pontos (separador de milhar) e troca vírgula por ponto
                 val_clean = val_clean.replace(".", "").replace(",", ".")
-                val_float = float(val_clean)
             # Se tem apenas vírgula, é formato brasileiro sem milhar (123,45)
-            elif "," in val_clean and "." not in val_clean:
+            elif "," in val_clean:
                 val_clean = val_clean.replace(",", ".")
-                val_float = float(val_clean)
-            # Se tem apenas ponto, pode ser formato americano OU valor do Google Sheets mal formatado
-            elif "." in val_clean:
-                val_float = float(val_clean)
-                
-                # CORREÇÃO ESPECIAL: Se o valor tem mais de 2 casas decimais (ex: 18.50051)
-                # significa que o Google Sheets armazenou sem o separador de milhar
-                # Exemplo: 18.500,51 foi salvo como "18.50051" (removeu vírgula e ponto)
-                # Precisamos multiplicar por 100 para restaurar o valor correto
-                decimal_part = val_clean.split('.')[1] if '.' in val_clean else ""
-                if len(decimal_part) > 2:
-                    # Tem mais de 2 casas decimais, é um valor mal formatado
-                    # Multiplicar por 100 para corrigir
-                    val_float = val_float * 100
-            else:
-                # Número sem separadores
-                val_float = float(val_clean)
             
-            # Formatar no padrão brasileiro
-            return f"R$ {val_float:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        except ValueError:
-            # Se não conseguir converter, retorna como está
-            return f"R$ {val_str}"
+            val_float = float(val_clean)
+        
+        # Formatar no padrão brasileiro com 2 casas decimais
+        return f"R$ {val_float:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     except:
         return str(val)
 

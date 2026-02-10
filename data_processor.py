@@ -118,8 +118,8 @@ def organize_sheet(file):
         result_df[col_f_name] = result_df[col_f_name].dt.strftime('%d/%m/%Y')
         result_df["Prazo (90 dias)"] = result_df["Prazo (90 dias)"].dt.strftime('%d/%m/%Y')
 
-        # Identificar e formatar colunas monetárias com 2 casas decimais
-        # Isso garante consistência e evita problemas de leitura no Google Sheets
+        # Garantir que colunas monetárias sejam números (float) para o Google Sheets
+        # NÃO formatar como string aqui - deixar a formatação para a exibição no Streamlit
         for col in result_df.columns:
             col_lower = col.lower()
             
@@ -135,13 +135,10 @@ def organize_sheet(file):
             # Verificar se é uma coluna numérica que provavelmente contém valores monetários
             if pd.api.types.is_numeric_dtype(result_df[col]):
                 try:
-                    # Converter para float e formatar com 2 casas decimais
+                    # Apenas garantir que é numérico (float) - NÃO converter para string
                     result_df[col] = pd.to_numeric(result_df[col], errors='coerce')
-                    # Formatar como string com 2 casas decimais no padrão brasileiro
-                    result_df[col] = result_df[col].apply(
-                        lambda x: f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") 
-                        if pd.notna(x) else ""
-                    )
+                    # Arredondar para 2 casas decimais
+                    result_df[col] = result_df[col].round(2)
                 except Exception:
                     pass  # Se der erro, mantém o valor original
 
