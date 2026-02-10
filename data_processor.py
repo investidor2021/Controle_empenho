@@ -75,6 +75,37 @@ def organize_sheet(file):
         # Select data
         result_df = df.iloc[:, col_indices].copy()
         
+        # CRÍTICO: Converter valores com vírgula decimal (formato brasileiro) para float
+        # O Excel pode salvar valores como "822,9" ou "18500,51" (strings)
+        # Precisamos converter para números ANTES de qualquer processamento
+        def convert_brazilian_decimal(val):
+            """Converte valores do formato brasileiro (vírgula) para float"""
+            if pd.isna(val):
+                return val
+            
+            # Se já é número, retorna como está
+            if isinstance(val, (int, float)):
+                return float(val)
+            
+            # Se é string, tenta converter
+            if isinstance(val, str):
+                val_clean = val.strip()
+                
+                # Se tem vírgula, é formato brasileiro
+                if ',' in val_clean:
+                    # Remove pontos (separador de milhar) e troca vírgula por ponto
+                    val_clean = val_clean.replace('.', '').replace(',', '.')
+                    try:
+                        return float(val_clean)
+                    except ValueError:
+                        return val  # Se não conseguir converter, retorna original
+            
+            return val
+        
+        # Aplicar conversão em todas as colunas numéricas
+        for col in result_df.columns:
+            result_df[col] = result_df[col].apply(convert_brazilian_decimal)
+        
         # Insert "De/Para" (Department) after Column D (which is now at index 0 in result_df)
         # Column D is at result_df.columns[0]
         col_d_name = result_df.columns[0]
