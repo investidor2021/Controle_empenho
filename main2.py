@@ -140,8 +140,21 @@ def format_currency(val):
             elif "," in val_clean and "." not in val_clean:
                 val_clean = val_clean.replace(",", ".")
                 val_float = float(val_clean)
-            # Se tem apenas ponto ou nenhum separador, é formato americano ou número simples
+            # Se tem apenas ponto, pode ser formato americano OU valor do Google Sheets mal formatado
+            elif "." in val_clean:
+                val_float = float(val_clean)
+                
+                # CORREÇÃO ESPECIAL: Se o valor tem mais de 2 casas decimais (ex: 18.50051)
+                # significa que o Google Sheets armazenou sem o separador de milhar
+                # Exemplo: 18.500,51 foi salvo como "18.50051" (removeu vírgula e ponto)
+                # Precisamos multiplicar por 100 para restaurar o valor correto
+                decimal_part = val_clean.split('.')[1] if '.' in val_clean else ""
+                if len(decimal_part) > 2:
+                    # Tem mais de 2 casas decimais, é um valor mal formatado
+                    # Multiplicar por 100 para corrigir
+                    val_float = val_float * 100
             else:
+                # Número sem separadores
                 val_float = float(val_clean)
             
             # Formatar no padrão brasileiro
