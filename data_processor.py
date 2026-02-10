@@ -76,8 +76,8 @@ def organize_sheet(file):
         result_df = df.iloc[:, col_indices].copy()
         
         # CRÍTICO: Converter valores com vírgula decimal (formato brasileiro) para float
-        # O Excel pode salvar valores como "822,9" ou "18500,51" (strings)
-        # Precisamos converter para números ANTES de qualquer processamento
+        # O Excel salva valores como "18500,51" ou "13412,43" (strings com vírgula decimal)
+        # Precisamos converter vírgula para ponto ANTES de converter para float
         def convert_brazilian_decimal(val):
             """Converte valores do formato brasileiro (vírgula) para float"""
             if pd.isna(val):
@@ -91,10 +91,17 @@ def organize_sheet(file):
             if isinstance(val, str):
                 val_clean = val.strip()
                 
-                # Se tem vírgula, é formato brasileiro
+                # Se tem vírgula, é formato brasileiro com vírgula como separador decimal
                 if ',' in val_clean:
-                    # Remove pontos (separador de milhar) e troca vírgula por ponto
-                    val_clean = val_clean.replace('.', '').replace(',', '.')
+                    # Se tem PONTO E VÍRGULA: formato "1.234,56" (ponto=milhar, vírgula=decimal)
+                    if '.' in val_clean:
+                        # Remove pontos (separador de milhar) e troca vírgula por ponto
+                        val_clean = val_clean.replace('.', '').replace(',', '.')
+                    # Se tem APENAS VÍRGULA: formato "18500,51" (vírgula=decimal)
+                    else:
+                        # Apenas troca vírgula por ponto (NÃO remove nada!)
+                        val_clean = val_clean.replace(',', '.')
+                    
                     try:
                         return float(val_clean)
                     except ValueError:
@@ -102,7 +109,7 @@ def organize_sheet(file):
             
             return val
         
-        # Aplicar conversão em todas as colunas numéricas
+        # Aplicar conversão em todas as colunas
         for col in result_df.columns:
             result_df[col] = result_df[col].apply(convert_brazilian_decimal)
         

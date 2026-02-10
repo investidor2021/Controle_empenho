@@ -270,6 +270,15 @@ if modo == "Organizador de Planilhas":
                         # Debug: mostrar o que será salvo
                         st.info(f"📤 Salvando no Google Sheets: {len(df_final)} registros, {len(df_final.columns)} colunas")
                         st.write("Colunas:", list(df_final.columns))
+                        
+                        # Debug detalhado: mostrar valores de exemplo das colunas monetárias
+                        with st.expander("🔍 Debug: Valores antes de salvar no Google Sheets"):
+                            # Encontrar colunas que parecem monetárias
+                            for col in df_final.columns:
+                                if any(palavra in col.lower() for palavra in ['saldo', 'valor', 'pagar']):
+                                    st.write(f"**{col}** (primeiros 3 valores):")
+                                    st.write(df_final[col].head(3).tolist())
+                                    st.write(f"Tipo de dados: {df_final[col].dtype}")
 
                         ws.clear()
                         ws.update([df_final.columns.values.tolist()] + df_final.values.tolist())
