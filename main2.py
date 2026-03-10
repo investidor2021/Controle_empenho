@@ -21,6 +21,8 @@ if "perfil" not in st.session_state:
     st.session_state.perfil = None
 if "departamento" not in st.session_state:
     st.session_state.departamento = None
+if "primeiro_acesso" not in st.session_state:
+    st.session_state.primeiro_acesso = False
 
 # ===============================
 # SIDEBAR LOGIN / CADASTRO
@@ -33,11 +35,12 @@ if not st.session_state.usuario:
     login_pass = st.sidebar.text_input("Senha", type="password")
     
     if st.sidebar.button("Entrar"):
-        sucesso, perfil, depto = auth_manager.verificar_login(login_user.strip(), login_pass)
+        sucesso, perfil, depto, p_acesso = auth_manager.verificar_login(login_user.strip(), login_pass)
         if sucesso:
             st.session_state.usuario = login_user
             st.session_state.perfil = perfil
             st.session_state.departamento = depto
+            st.session_state.primeiro_acesso = p_acesso
             st.success("Login realizado!")
             time.sleep(1)
             st.rerun()
@@ -54,6 +57,35 @@ if st.sidebar.button("Sair"):
     st.session_state.perfil = None
     st.session_state.departamento = None
     st.rerun()
+
+# --- Módulo Alterar Senha ---
+with st.sidebar.expander("🔑 Alterar Senha"):
+    senha_atual = st.text_input("Senha Atual", type="password", key="senha_atual")
+    nova_senha = st.text_input("Nova Senha", type="password", key="nova_senha")
+    confirmar_senha = st.text_input("Confirmar Nova Senha", type="password", key="confirmar_senha")
+    
+    if st.button("Salvar Nova Senha"):
+        if nova_senha and confirmar_senha and senha_atual:
+            if nova_senha == confirmar_senha:
+                ok, msg = auth_manager.alterar_senha(st.session_state.usuario, senha_atual, nova_senha)
+                if ok:
+                    st.success(msg)
+                    st.session_state.primeiro_acesso = False
+                    # Dá um timerzinho e reseta
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error(msg)
+            else:
+                st.warning("As novas senhas não coincidem.")
+        else:
+            st.warning("Preencha todos os campos para alterar a senha.")
+
+# Bloqueio de Primeiro Acesso
+if st.session_state.primeiro_acesso:
+    st.warning("⚠️ Bem-vindo(a) ao seu primeiro acesso! É obrigatório mudar a sua senha provisória antes de continuar utilizando o sistema.")
+    st.info("Utilize o menu lateral '🔑 Alterar Senha' para configurar a sua senha definitiva.")
+    st.stop() # Bloqueia o carregamento do restante da página
 
 perfil = st.session_state.perfil
 departamento_usuario = st.session_state.departamento
@@ -199,7 +231,7 @@ else:
 if modo == "Organizador de Planilhas":
     st.title("📂 Organizador de Planilhas")
     st.markdown("Extrai colunas (D, F, H, J, K, W, AJ), mapeia departamentos e verifica prazos.")
-    st.markdown("O arquivo é o analitico de empenho no formato .xlsx com ponto e virgula de separação e virgula de centavos.")
+    st.markdown("O arquivo é o analitico de empenho no formato .xlsx com ponto e virgula de separação e virgula de centavos. De empenhos a pagar")
     uploaded_file = st.file_uploader("Carregue a planilha (Excel ou CSV)", type=["xlsx", "xls", "csv"])
 
     if uploaded_file and st.button("Processar e Salvar"):
@@ -363,6 +395,27 @@ if modo == "Gerenciar Usuários" and st.session_state.perfil == "Administrador":
                     st.error(msg)
             else:
                 st.warning("Preencha todos os campos.")
+                
+    st.divider()
+    st.markdown("### 🔄 Redefinir Senha de Usuário")
+    st.markdown("Força a redefinição de um usuário para a senha provisória padronizada `12345678` e o obriga a trocar no próximo login.")
+    
+    with st.form("form_reset"):
+        # Uma lista suspensa pode ser construída buscando os nomes, mas pra facilitar 
+        # e evitar leitura gspread na tela inicial usaremos um text input pra evitar delay.
+        # Em grandes bases relacional se usa selectbox. 
+        reset_user = st.text_input("Nome do Usuário a redefinir")
+        
+        submitted_reset = st.form_submit_button("Resetar Senha para '12345678'", type="primary")
+        if submitted_reset:
+            if reset_user:
+                ok, msg = auth_manager.redefinir_senha_admin(reset_user.strip())
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+            else:
+                st.warning("Digite o nome do usuário a ser redefinido.")
                     
                     
 # ===============================
