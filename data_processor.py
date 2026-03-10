@@ -55,7 +55,12 @@ def organize_sheet(file):
     try:
         # Load data
         if file.name.endswith('.csv'):
-            df = pd.read_csv(file, dtype=str)  # Ler como string para não perder formatação
+            try:
+                df = pd.read_csv(file, dtype=str, encoding='utf-8')
+            except UnicodeDecodeError:
+                # Fallback para Windows-1252/Latin-1 (comum em exportações brasileiras como o do Audesp/sistemas contábeis)
+                file.seek(0)
+                df = pd.read_csv(file, dtype=str, encoding='iso-8859-1', sep=';')
         else:
             # Ler Excel como strings para preservar formatação brasileira (vírgula decimal)
             df = pd.read_excel(file, dtype=str, engine='openpyxl')
