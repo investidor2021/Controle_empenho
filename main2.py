@@ -405,17 +405,26 @@ if modo == "Gerenciar Usuários" and st.session_state.perfil == "Administrador":
     
     with st.form("form_reset"):
         if not lista_usuarios:
-            st.warning("Nenhum usuário encontrado ou erro de conexão.")
+            st.warning("Nenhum usuário encontrado na planilha.")
             reset_user = None
             submitted_reset = st.form_submit_button("Resetar Senha para '12345678'", type="primary", disabled=True)
         else:
-            # Detectar colunas
-            chaves = list(lista_usuarios[0].keys())
-            col_usuario = next((k for k in chaves if k.lower().strip() == "usuario" or k.lower().strip() == "usuário"), "Usuario")
-            col_perfil = next((k for k in chaves if k.lower().strip() == "perfil"), "Perfil")
-            
-            # Montar opções formato: "Nome (Perfil)"
-            opcoes_usuarios = [f"{str(u.get(col_usuario, '')).strip()} ({str(u.get(col_perfil, '')).strip()})" for u in lista_usuarios if str(u.get(col_usuario, '')).strip()]
+            opcoes_usuarios = []
+            for u in lista_usuarios:
+                # Buscamos as chaves independentemente de case ou espaços extras
+                nome = ""
+                perfil_user = ""
+                for k, v in u.items():
+                    if "usuario" in k.lower() or "usuário" in k.lower():
+                        nome = str(v).strip()
+                    elif "perfil" in k.lower():
+                        perfil_user = str(v).strip()
+                
+                if nome:
+                    opcoes_usuarios.append(f"{nome} ({perfil_user})")
+
+            if not opcoes_usuarios:
+                st.warning("As colunas 'Usuario' e 'Perfil' não foram encontradas na planilha.")
             
             usuario_selecionado = st.selectbox("Selecione o Usuário a redefinir", opcoes_usuarios)
             
@@ -601,14 +610,14 @@ if st.session_state.usuario: # Só mostra se estiver logado
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Total de Empenhos", total_empenhos, delta="\u200B", delta_color="off")
+        st.metric("Total de Empenhos", total_empenhos, delta="R$ 0,00", delta_color="off")
         if st.button("📋 Ver Todos", key="btn_todos", use_container_width=True):
             st.session_state["filtro_status"] = "Todos"
             st.rerun()
     
     with col2:
         st.metric("🔴 Vencidos", qtd_vencidos, 
-                  delta=f"R$ {valor_vencidos:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_vencidos > 0 else "\u200B",
+                  delta=f"R$ {valor_vencidos:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
                   delta_color="inverse" if valor_vencidos > 0 else "off")
         if st.button("🔍 Filtrar", key="btn_vencidos", use_container_width=True, disabled=qtd_vencidos == 0):
             st.session_state["filtro_status"] = "Vencido"
@@ -616,7 +625,7 @@ if st.session_state.usuario: # Só mostra se estiver logado
     
     with col3:
         st.metric("⚠️ A Vencer (≤5 dias)", qtd_a_vencer,
-                  delta=f"R$ {valor_a_vencer:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_a_vencer > 0 else "\u200B",
+                  delta=f"R$ {valor_a_vencer:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
                   delta_color="off")
         if st.button("🔍 Filtrar", key="btn_a_vencer", use_container_width=True, disabled=qtd_a_vencer == 0):
             st.session_state["filtro_status"] = "Vence em"
@@ -624,7 +633,7 @@ if st.session_state.usuario: # Só mostra se estiver logado
     
     with col4:
         st.metric("✅ No Prazo", qtd_no_prazo,
-                  delta=f"R$ {valor_no_prazo:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_no_prazo > 0 else "\u200B",
+                  delta=f"R$ {valor_no_prazo:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
                   delta_color="normal" if valor_no_prazo > 0 else "off")
         if st.button("🔍 Filtrar", key="btn_no_prazo", use_container_width=True, disabled=qtd_no_prazo == 0):
             st.session_state["filtro_status"] = "No Prazo"
