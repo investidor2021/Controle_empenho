@@ -293,6 +293,8 @@ if modo == "Organizador de Planilhas":
                                     st.write(f"Tipo de dados: {df_final[col].dtype}")
 
                         ws.clear()
+                        # Substitui valores NaN (Not a Number) e NaT (Not a Time) por string vazia para as regras do JSON
+                        df_final = df_final.fillna("")
                         ws.update([df_final.columns.values.tolist()] + df_final.values.tolist())
                         st.success(f"Planilha atualizada com sucesso! {len(df_result)} registros processados. Observações preservadas.")
 
