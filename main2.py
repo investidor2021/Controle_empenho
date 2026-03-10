@@ -199,7 +199,7 @@ else:
 if modo == "Organizador de Planilhas":
     st.title("📂 Organizador de Planilhas")
     st.markdown("Extrai colunas (D, F, H, J, K, W, AJ), mapeia departamentos e verifica prazos.")
-    
+    st.markdown("O arquivo é o analitico de empenho no formato .xlsx com ponto e virgula de separação e virgula de centavos.")
     uploaded_file = st.file_uploader("Carregue a planilha (Excel ou CSV)", type=["xlsx", "xls", "csv"])
 
     if uploaded_file and st.button("Processar e Salvar"):
@@ -216,6 +216,14 @@ if modo == "Organizador de Planilhas":
                 existing_data = ws.get_all_records()
                 df_existing = pd.DataFrame(existing_data)
                 
+                # PREVENÇÃO CRÍTICA DE ERROS JSON (NaN, NaT, Infinity)
+                # Garante que as colunas são textos válidos
+                df_result.columns = [str(c) if pd.notna(c) else f"Coluna_Sem_Nome_{i}" for i, c in enumerate(df_result.columns)]
+                # Converte todas as variáveis nulas do Pandas para string vazia
+                df_result = df_result.fillna("")
+                import numpy as np
+                df_result = df_result.replace([np.inf, -np.inf], "")
+
                 if df_existing.empty:
                     # Se vazio, apenas sobrescreve
                     ws.update([df_result.columns.values.tolist()] + df_result.values.tolist())
@@ -269,6 +277,8 @@ if modo == "Organizador de Planilhas":
 
                         # 6. Salvar de volta
                         df_final = pd.DataFrame(final_rows)
+                        df_final = df_final.fillna("")
+                        df_final = df_final.replace([np.inf, -np.inf], "")
                         
                         # Garantir que as colunas chaves estejam presentes e na ordem preferida (opcional, mas bom manter padrão)
                         # Vamos usar as colunas do df_result como base para a ordem, adicionando extras se houver
