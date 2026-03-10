@@ -192,3 +192,16 @@ def redefinir_senha_admin(usuario):
 
     return False, "Usuário não encontrado."
 
+def get_all_users():
+    """Retorna uma lista de dicionários com os dados de todos os usuários."""
+    sh = conectar_sheets()
+    if not sh:
+        return []
+
+    init_usuarios()
+    try:
+        ws = sh.worksheet("usuarios")
+        return ws.get_all_records()
+    except Exception as e:
+        st.error(f"Erro ao buscar usuários: {e}")
+        return []

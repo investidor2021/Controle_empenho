@@ -400,13 +400,30 @@ if modo == "Gerenciar Usuários" and st.session_state.perfil == "Administrador":
     st.markdown("### 🔄 Redefinir Senha de Usuário")
     st.markdown("Força a redefinição de um usuário para a senha provisória padronizada `12345678` e o obriga a trocar no próximo login.")
     
+    # Carregar usuários para o selectbox
+    lista_usuarios = auth_manager.get_all_users()
+    
     with st.form("form_reset"):
-        # Uma lista suspensa pode ser construída buscando os nomes, mas pra facilitar 
-        # e evitar leitura gspread na tela inicial usaremos um text input pra evitar delay.
-        # Em grandes bases relacional se usa selectbox. 
-        reset_user = st.text_input("Nome do Usuário a redefinir")
-        
-        submitted_reset = st.form_submit_button("Resetar Senha para '12345678'", type="primary")
+        if not lista_usuarios:
+            st.warning("Nenhum usuário encontrado ou erro de conexão.")
+            reset_user = None
+            submitted_reset = st.form_submit_button("Resetar Senha para '12345678'", type="primary", disabled=True)
+        else:
+            # Detectar colunas
+            chaves = list(lista_usuarios[0].keys())
+            col_usuario = next((k for k in chaves if k.lower().strip() == "usuario" or k.lower().strip() == "usuário"), "Usuario")
+            col_perfil = next((k for k in chaves if k.lower().strip() == "perfil"), "Perfil")
+            
+            # Montar opções formato: "Nome (Perfil)"
+            opcoes_usuarios = [f"{str(u.get(col_usuario, '')).strip()} ({str(u.get(col_perfil, '')).strip()})" for u in lista_usuarios if str(u.get(col_usuario, '')).strip()]
+            
+            usuario_selecionado = st.selectbox("Selecione o Usuário a redefinir", opcoes_usuarios)
+            
+            # Extrair apenas o nome do usuário antes do " ("
+            reset_user = usuario_selecionado.split(" (")[0] if usuario_selecionado else None
+            
+            submitted_reset = st.form_submit_button("Resetar Senha para '12345678'", type="primary")
+
         if submitted_reset:
             if reset_user:
                 ok, msg = auth_manager.redefinir_senha_admin(reset_user.strip())
@@ -415,7 +432,7 @@ if modo == "Gerenciar Usuários" and st.session_state.perfil == "Administrador":
                 else:
                     st.error(msg)
             else:
-                st.warning("Digite o nome do usuário a ser redefinido.")
+                st.warning("Selecione um usuário para ser redefinido.")
                     
                     
 # ===============================
@@ -584,22 +601,22 @@ if st.session_state.usuario: # Só mostra se estiver logado
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("Total de Empenhos", total_empenhos)
+        st.metric("Total de Empenhos", total_empenhos, delta="\u200B", delta_color="off")
         if st.button("📋 Ver Todos", key="btn_todos", use_container_width=True):
             st.session_state["filtro_status"] = "Todos"
             st.rerun()
     
     with col2:
         st.metric("🔴 Vencidos", qtd_vencidos, 
-                  delta=f"R$ {valor_vencidos:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_vencidos > 0 else None,
-                  delta_color="inverse")
+                  delta=f"R$ {valor_vencidos:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_vencidos > 0 else "\u200B",
+                  delta_color="inverse" if valor_vencidos > 0 else "off")
         if st.button("🔍 Filtrar", key="btn_vencidos", use_container_width=True, disabled=qtd_vencidos == 0):
             st.session_state["filtro_status"] = "Vencido"
             st.rerun()
     
     with col3:
         st.metric("⚠️ A Vencer (≤5 dias)", qtd_a_vencer,
-                  delta=f"R$ {valor_a_vencer:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_a_vencer > 0 else None,
+                  delta=f"R$ {valor_a_vencer:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_a_vencer > 0 else "\u200B",
                   delta_color="off")
         if st.button("🔍 Filtrar", key="btn_a_vencer", use_container_width=True, disabled=qtd_a_vencer == 0):
             st.session_state["filtro_status"] = "Vence em"
@@ -607,8 +624,8 @@ if st.session_state.usuario: # Só mostra se estiver logado
     
     with col4:
         st.metric("✅ No Prazo", qtd_no_prazo,
-                  delta=f"R$ {valor_no_prazo:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_no_prazo > 0 else None,
-                  delta_color="normal")
+                  delta=f"R$ {valor_no_prazo:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if valor_no_prazo > 0 else "\u200B",
+                  delta_color="normal" if valor_no_prazo > 0 else "off")
         if st.button("🔍 Filtrar", key="btn_no_prazo", use_container_width=True, disabled=qtd_no_prazo == 0):
             st.session_state["filtro_status"] = "No Prazo"
             st.rerun()
