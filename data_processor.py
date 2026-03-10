@@ -55,12 +55,30 @@ def organize_sheet(file):
     try:
         # Load data
         if file.name.endswith('.csv'):
-            try:
-                df = pd.read_csv(file, dtype=str, encoding='utf-8')
-            except UnicodeDecodeError:
-                # Fallback para Windows-1252/Latin-1 (comum em exportações brasileiras como o do Audesp/sistemas contábeis)
+            # Tentativa robusta de leitura com diferentes encodings e separadores
+            success = False
+            for enc in ['utf-8', 'iso-8859-1', 'windows-1252']:
+                for separator in [';', ',', '\t']:
+                    try:
+                        file.seek(0)
+                        # Usa on_bad_lines='skip' se versões mais novas do pandas, mas error no antigo. Vamos focar no sep.
+                        df_temp = pd.read_csv(file, dtype=str, encoding=enc, sep=separator)
+                        if len(df_temp.columns) > 1:  # Se achou mais de uma coluna, o delimitador está correto
+                            df = df_temp
+                            success = True
+                            break
+                    except Exception:
+                        continue
+                if success:
+                    break
+            
+            if not success:
+                # Fallback final tentando auto-detect com a engine do Python
                 file.seek(0)
-                df = pd.read_csv(file, dtype=str, encoding='iso-8859-1', sep=';')
+                try:
+                    df = pd.read_csv(file, dtype=str, encoding='iso-8859-1', sep=None, engine='python')
+                except Exception as e:
+                    return None, f"Erro crítico na leitura do CSV. Verifique se o formato está correto. Detalhe: {e}"
         else:
             # Ler Excel como strings para preservar formatação brasileira (vírgula decimal)
             df = pd.read_excel(file, dtype=str, engine='openpyxl')
