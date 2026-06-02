@@ -37,14 +37,31 @@ DEPARTAMENTOS = {
 
 def get_department_name(code):
     """
-    Returns the department name based on the code.
-    TODO: Update this dictionary with the actual 'De/Para' rules from the user.
+    Returns the department name (or group name) based on the code.
+    Applied user rules:
+    - 01.02.01 to 01.02.13, 01.02.17 to 01.02.19, 01.02.22 to 01.02.24 -> "Movimento Geral"
+    - 01.02.14 -> "Educação"
+    - 01.02.15, 01.02.16 -> "Fundeb"
+    - 01.02.20 -> "Saúde"
+    - Others -> original department name or DEP-code
     """
-    
-    # Return the mapped name or the code formatted as "DEP-{code}" if not found.
-    # User requested to use the first 8 chars (which matches the "01.02.01" pattern) to identify the department.
     clean_code = str(code).strip()
-    prefix = clean_code[:8] 
+    prefix = clean_code[:8]
+    
+    if prefix.startswith("01.02."):
+        try:
+            dep_num = int(prefix[6:8])
+            if (1 <= dep_num <= 13) or (17 <= dep_num <= 19) or (22 <= dep_num <= 24):
+                return "Movimento Geral"
+            elif dep_num == 14:
+                return "Educação"
+            elif dep_num in [15, 16]:
+                return "Fundeb"
+            elif dep_num == 20:
+                return "Saúde"
+        except ValueError:
+            pass
+            
     return DEPARTAMENTOS.get(prefix, f"DEP-{prefix}")
 
 def organize_sheet(file):
@@ -107,7 +124,7 @@ def organize_sheet(file):
         debug_conversions = []
         
         def convert_brazilian_decimal(val):
-            """Converte valores do formato brasileiro (vírgula) para float"""
+            """Converte valores do formato brasileiro (vírgula) ou americano (ponto) para float"""
             if pd.isna(val):
                 return val
             
@@ -123,7 +140,7 @@ def organize_sheet(file):
                 
                 # Se tem vírgula, é formato brasileiro com vírgula como separador decimal
                 if ',' in val_clean:
-                    # Se tem PONTO E VÍRGULA: formato "1.234,56" (ponto=milhar, vírgula=decimal)
+                    # Se tem PONTO: formato "1.234,56" (ponto=milhar, vírgula=decimal)
                     if '.' in val_clean:
                         # Remove pontos (separador de milhar) e troca vírgula por ponto
                         val_clean = val_clean.replace('.', '').replace(',', '.')
@@ -131,15 +148,16 @@ def organize_sheet(file):
                     else:
                         # Apenas troca vírgula por ponto (NÃO remove nada!)
                         val_clean = val_clean.replace(',', '.')
-                    
-                    try:
-                        result = float(val_clean)
-                        # Debug: registrar conversões de valores monetários
-                        if result > 100:  # Provavelmente valor monetário
-                            debug_conversions.append(f"{original_val} → {result}")
-                        return result
-                    except ValueError:
-                        return val  # Se não conseguir converter, retorna original
+                
+                # Tenta converter para float
+                try:
+                    result = float(val_clean)
+                    # Debug: registrar conversões de valores monetários
+                    if result > 100:  # Provavelmente valor monetário
+                        debug_conversions.append(f"{original_val} → {result}")
+                    return result
+                except ValueError:
+                    return val  # Se não conseguir converter, retorna original
             
             return val
         
@@ -210,8 +228,10 @@ def organize_sheet(file):
             if any(palavra in col_lower for palavra in ['empenho', 'emp.', 'emp', 'código', 'codigo', 'cod.', 'nº', 'numero', 'número']):
                 continue
                 
-            # Verificar se é uma coluna numérica que provavelmente contém valores monetários
-            if pd.api.types.is_numeric_dtype(result_df[col]):
+            # Verificar se é uma coluna numérica ou se contém palavras-chave que indicam valores monetários
+            # Isso é necessário porque CSVs são lidos como strings (dtype 'object')
+            is_monetary = any(palavra in col_lower for palavra in ['valor', 'saldo', 'pago', 'pagar', 'liquidado', 'empenhado'])
+            if pd.api.types.is_numeric_dtype(result_df[col]) or is_monetary:
                 try:
                     # Apenas garantir que é numérico (float) - NÃO converter para string
                     result_df[col] = pd.to_numeric(result_df[col], errors='coerce')

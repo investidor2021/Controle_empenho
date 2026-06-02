@@ -738,57 +738,58 @@ if st.session_state.usuario: # Só mostra se estiver logado
         
         st.markdown("---")
 
-        for _, row in df_display.iterrows():
-            empenho_val = row[col_empenho]
-            
-            cols = st.columns(cols_spec)
-            
-            # 1. Data Emissão
-            cols[0].caption(str(row.get(col_emissao, "-")))
-            
-            # 2. Empenho
-            cols[1].write(f"{empenho_val}")
-            
-            # 3. Código Fornecedor
-            cols[2].caption(str(row.get(col_cod_forn, "-")))
-            
-            # 4. Nome Fornecedor
-            cols[3].caption(str(row.get(col_fornecedor, "-")))
-            
-            # 5. Histórico (Scrollable)
-            hist_text = str(row.get(col_historico, "-"))
-            cols[4].markdown(
-                f"""<div style="height: 50px; overflow-y: auto; font-size: 12px; background-color: rgba(255, 255, 255, 0.05); padding: 5px; border-radius: 4px;">{hist_text}</div>""",
-                unsafe_allow_html=True
-            )
-            
-            # 6. Saldo (Formatado)
-            saldo_raw = row.get(col_saldo, "-")
-            cols[5].caption(format_currency(saldo_raw))
-
-            # 7. Prazo
-            cols[6].caption(str(row.get("Prazo (90 dias)", "-")))
-
-            # 8. Status
-            status_val = row[col_status]
-            if status_val == "Vencido":
-                cols[7].error(status_val)
-            elif "Vence em" in str(status_val):
-                cols[7].warning(status_val)
-            else:
-                cols[7].success(status_val)
+        with st.container(height=600):
+            for _, row in df_display.iterrows():
+                empenho_val = row[col_empenho]
                 
-            # 9. Observação
-            obs_key = f"obs_{empenho_val}_ext"
-            cols[8].text_input(
-                "Obs",
-                value=row.get("Observação", ""),
-                key=obs_key,
-                label_visibility="collapsed",
-                on_change=lambda k=obs_key, e=empenho_val: salvar_observacao(e, k),
-            )
-            
-            st.divider()
+                cols = st.columns(cols_spec)
+                
+                # 1. Data Emissão
+                cols[0].caption(str(row.get(col_emissao, "-")))
+                
+                # 2. Empenho
+                cols[1].write(f"{empenho_val}")
+                
+                # 3. Código Fornecedor
+                cols[2].caption(str(row.get(col_cod_forn, "-")))
+                
+                # 4. Nome Fornecedor
+                cols[3].caption(str(row.get(col_fornecedor, "-")))
+                
+                # 5. Histórico (Scrollable)
+                hist_text = str(row.get(col_historico, "-"))
+                cols[4].markdown(
+                    f"""<div style="height: 50px; overflow-y: auto; font-size: 12px; background-color: rgba(255, 255, 255, 0.05); padding: 5px; border-radius: 4px;">{hist_text}</div>""",
+                    unsafe_allow_html=True
+                )
+                
+                # 6. Saldo (Formatado)
+                saldo_raw = row.get(col_saldo, "-")
+                cols[5].caption(format_currency(saldo_raw))
+    
+                # 7. Prazo
+                cols[6].caption(str(row.get("Prazo (90 dias)", "-")))
+    
+                # 8. Status
+                status_val = row[col_status]
+                if status_val == "Vencido":
+                    cols[7].error(status_val)
+                elif "Vence em" in str(status_val):
+                    cols[7].warning(status_val)
+                else:
+                    cols[7].success(status_val)
+                    
+                # 9. Observação
+                obs_key = f"obs_{empenho_val}_ext"
+                cols[8].text_input(
+                    "Obs",
+                    value=row.get("Observação", ""),
+                    key=obs_key,
+                    label_visibility="collapsed",
+                    on_change=lambda k=obs_key, e=empenho_val: salvar_observacao(e, k),
+                )
+                
+                st.divider()
     
     st.stop() # Interrompe aqui para não carregar o resto do app
 
