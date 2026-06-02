@@ -111,7 +111,7 @@ def organize_sheet(file):
 
         # Extract specific columns using iloc
         # We start with D (3)
-        col_indices = [3, 5, 7, 9, 10, 22, 35]
+        col_indices = [3, 5, 7, 8, 9, 10, 22, 35]
         
         # Select data
         result_df = df.iloc[:, col_indices].copy()
@@ -195,7 +195,35 @@ def organize_sheet(file):
         # Status Check
         today = datetime.now()
         
-        def check_status(deadline):
+        col_tipo_name = result_df.columns[4]
+        col_saldo_name = result_df.columns[8]
+        
+        def determine_status(row):
+            # Identifica o tipo de empenho: remove espaços e coloca em maiúsculas
+            tipo = str(row[col_tipo_name]).strip().upper()
+            
+            # Se for Global (G) ou Estimativo (E)
+            if tipo in ['G', 'GLOBAL', 'E', 'ESTIMATIVO', 'ESTIMADO']:
+                # Se tiver saldo (maior que zero)
+                saldo_raw = row[col_saldo_name]
+                if isinstance(saldo_raw, (int, float)):
+                    saldo_val = float(saldo_raw)
+                else:
+                    try:
+                        val_str = str(saldo_raw).strip().replace("R$", "").replace(" ", "")
+                        if "," in val_str and "." in val_str:
+                            val_str = val_str.replace(".", "").replace(",", ".")
+                        elif "," in val_str:
+                            val_str = val_str.replace(",", ".")
+                        saldo_val = float(val_str)
+                    except:
+                        saldo_val = 0
+                
+                if saldo_val > 0.01:
+                    return "Em execução"
+            
+            # Caso contrário, segue a lógica de 90 dias
+            deadline = row["Prazo (90 dias)"]
             if pd.isna(deadline):
                 return "Data Inválida"
             
@@ -208,7 +236,7 @@ def organize_sheet(file):
             else:
                 return "No Prazo"
 
-        result_df["Status"] = result_df["Prazo (90 dias)"].apply(check_status)
+        result_df["Status"] = result_df.apply(determine_status, axis=1)
         
         # Formatting Date Columns for display
         result_df[col_f_name] = result_df[col_f_name].dt.strftime('%d/%m/%Y')

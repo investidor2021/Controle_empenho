@@ -580,6 +580,8 @@ if st.session_state.usuario: # Só mostra se estiver logado
                 return 10 + dias  # 10-15 para "vence em 0-5 dias"
             except:
                 return 20
+        elif "em execução" in status_str:
+            return 50  # Prioridade intermediária para em execução
         elif "no prazo" in status_str:
             return 100  # Menos urgente
         else:
@@ -602,7 +604,7 @@ if st.session_state.usuario: # Só mostra se estiver logado
     total_empenhos = len(df)
     
     vencidos = df[df[col_status].str.contains("Vencido", case=False, na=False)] if col_status else pd.DataFrame()
-    a_vencer = df[df[col_status].str.contains("Vence em", case=False, na=False)] if col_status else pd.DataFrame()
+    a_vencer = df[df[col_status].str.contains("Vence em|Em execução", case=False, na=False)] if col_status else pd.DataFrame()
     no_prazo = df[df[col_status].str.contains("No Prazo", case=False, na=False)] if col_status else pd.DataFrame()
     
     qtd_vencidos = len(vencidos)
@@ -648,11 +650,11 @@ if st.session_state.usuario: # Só mostra se estiver logado
             st.rerun()
     
     with col3:
-        st.metric("⚠️ A Vencer (≤5 dias)", qtd_a_vencer,
+        st.metric("⚠️ Em Execução / A Vencer", qtd_a_vencer,
                   delta=f"R$ {valor_a_vencer:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
                   delta_color="off")
         if st.button("🔍 Filtrar", key="btn_a_vencer", use_container_width=True, disabled=qtd_a_vencer == 0):
-            st.session_state["filtro_status"] = "Vence em"
+            st.session_state["filtro_status"] = "Vence em|Em execução"
             st.rerun()
     
     with col4:
@@ -798,7 +800,7 @@ if st.session_state.usuario: # Só mostra se estiver logado
                 status_val = row[col_status]
                 if status_val == "Vencido":
                     cols[7].error(status_val)
-                elif "Vence em" in str(status_val):
+                elif "Vence em" in str(status_val) or status_val == "Em execução":
                     cols[7].warning(status_val)
                 else:
                     cols[7].success(status_val)
