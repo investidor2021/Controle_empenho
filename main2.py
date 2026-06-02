@@ -242,107 +242,131 @@ if modo == "Organizador de Planilhas":
         else:
             ws = conectar_sheets()
             
-            # --- Lógica de Merge Inteligente ---
+            # --- Lógica de Merge Inteligente com Exclusão de Zerados ---
             try:
                 # 1. Carregar dados existentes
                 existing_data = ws.get_all_records()
                 df_existing = pd.DataFrame(existing_data)
                 
-                # PREVENÇÃO CRÍTICA DE ERROS JSON (NaN, NaT, Infinity)
-                # Garante que as colunas são textos válidos
-                df_result.columns = [str(c) if pd.notna(c) else f"Coluna_Sem_Nome_{i}" for i, c in enumerate(df_result.columns)]
-                # Converte todas as variáveis nulas do Pandas para string vazia
-                df_result = df_result.fillna("")
-                import numpy as np
-                df_result = df_result.replace([np.inf, -np.inf], "")
-
-                if df_existing.empty:
-                    # Se vazio, apenas sobrescreve
-                    ws.update([df_result.columns.values.tolist()] + df_result.values.tolist())
-                    st.success("Planilha salva no Google Sheets com sucesso! (Base estava vazia)")
+                # Identificar colunas chaves no novo arquivo
+                col_emp_new = next((c for c in df_result.columns if "empenho" in c.lower()), None)
+                col_saldo_new = next((c for c in df_result.columns if any(x in c.lower() for x in ["saldo", "valor", "pagar"])), None)
+                
+                if not col_emp_new or not col_saldo_new:
+                    st.error("Erro: Não foi possível identificar as colunas 'Empenho' ou 'Saldo' no arquivo enviado.")
                 else:
-                    # 2. Identificar coluna de Empenho e Observação na base existente
-                    col_emp_exist = next((c for c in df_existing.columns if "empenho" in c.lower()), None)
-                    col_obs_exist = next((c for c in df_existing.columns if "observação" in c.lower() or "observacao" in c.lower()), None)
+                    # Função robusta para identificar valores zerados
+                    def is_zero_value(val):
+                        if pd.isna(val):
+                            return True
+                        if isinstance(val, (int, float)):
+                            return abs(val) < 0.01
+                        val_str = str(val).strip().replace("R$", "").replace(" ", "")
+                        if not val_str or val_str == "0" or val_str == "0,00" or val_str == "0.00" or val_str == "":
+                            return True
+                        try:
+                            if "," in val_str and "." in val_str:
+                                val_str = val_str.replace(".", "").replace(",", ".")
+                            elif "," in val_str:
+                                val_str = val_str.replace(",", ".")
+                            return abs(float(val_str)) < 0.01
+                        except:
+                            return False
+
+                    # Separar empenhos ativos e empenhos zerados do novo upload
+                    mask_zero = df_result[col_saldo_new].apply(is_zero_value)
+                    df_result_active = df_result[~mask_zero].copy()
+                    df_result_zero = df_result[mask_zero].copy()
                     
-                    # Identificar coluna de Empenho no novo upload (df_result)
-                    col_emp_new = next((c for c in df_result.columns if "empenho" in c.lower()), None)
-                    col_obs_new = "Observação" # data_processor garante essa coluna
+                    # Guardar códigos de empenhos zerados do upload para excluir da planilha
+                    empenhos_a_excluir = set(df_result_zero[col_emp_new].astype(str).str.strip().tolist())
+                    
+                    # PREVENÇÃO CRÍTICA DE ERROS JSON (NaN, NaT, Infinity)
+                    df_result_active.columns = [str(c) if pd.notna(c) else f"Coluna_Sem_Nome_{i}" for i, c in enumerate(df_result_active.columns)]
+                    df_result_active = df_result_active.fillna("")
+                    import numpy as np
+                    df_result_active = df_result_active.replace([np.inf, -np.inf], "")
 
-                    if not col_emp_exist or not col_emp_new:
-                        st.error("Erro: Não foi possível identificar a coluna 'Empenho' para fazer a mesclagem.")
+                    if df_existing.empty:
+                        # Se vazio, apenas salva os ativos (que não estão zerados)
+                        ws.update([df_result_active.columns.values.tolist()] + df_result_active.values.tolist())
+                        st.success("Planilha salva no Google Sheets com sucesso! (Base estava vazia, registros zerados foram descartados)")
+                        df_final = df_result_active
                     else:
-                        # 3. Converter para dicionários para fácil acesso
-                        # Chave: Empenho, Valor: Linha completa
-                        existing_dict = {str(row[col_emp_exist]): row for _, row in df_existing.iterrows()}
-                        
-                        # Lista final combinada
-                        final_rows = []
-                        
-                        # Conjunto para rastrear quais empenhos já processamos do arquivo novo
-                        processed_empenhos = set()
+                        # 2. Identificar coluna de Empenho, Observação e Saldo na base existente
+                        col_emp_exist = next((c for c in df_existing.columns if "empenho" in c.lower()), None)
+                        col_obs_exist = next((c for c in df_existing.columns if "observação" in c.lower() or "observacao" in c.lower()), None)
+                        col_saldo_exist = next((c for c in df_existing.columns if any(x in c.lower() for x in ["saldo", "valor", "pagar"])), None)
+                        col_obs_new = "Observação" # data_processor garante essa coluna
 
-                        # 4. Iterar sobre o NOVO df
-                        for _, row_new in df_result.iterrows():
-                            emp_val = str(row_new[col_emp_new])
-                            processed_empenhos.add(emp_val)
+                        if not col_emp_exist:
+                            st.error("Erro: Não foi possível identificar a coluna 'Empenho' na planilha do Google Sheets.")
+                        else:
+                            # 3. Converter base existente para dicionário
+                            existing_dict = {str(row[col_emp_exist]).strip(): row for _, row in df_existing.iterrows()}
                             
-                            if emp_val in existing_dict:
-                                # JÁ EXISTE: Atualiza dados, mas PRESERVA observação antiga
-                                row_merged = row_new.to_dict()
+                            # Lista final combinada
+                            final_rows = []
+                            processed_empenhos = set()
+
+                            # 4. Iterar sobre o df de ativos
+                            for _, row_new in df_result_active.iterrows():
+                                emp_val = str(row_new[col_emp_new]).strip()
+                                processed_empenhos.add(emp_val)
                                 
-                                # Tenta pegar observação antiga
-                                old_obs = existing_dict[emp_val].get(col_obs_exist, "")
-                                if old_obs:
-                                    row_merged[col_obs_new] = old_obs
-                                    
-                                final_rows.append(row_merged)
-                            else:
-                                # NOVO: Adiciona como está
-                                final_rows.append(row_new.to_dict())
-                        
-                        # 5. E os que estavam na planilha antiga mas NÃO no upload?
-                        # O usuário não especificou remover. Por segurança no "acompanhamento", MANTÉM.
-                        for emp_val, row_old in existing_dict.items():
-                            if emp_val not in processed_empenhos:
-                                final_rows.append(row_old)
+                                if emp_val in existing_dict:
+                                    # JÁ EXISTE E ATIVO: Atualiza dados, mas PRESERVA observação antiga
+                                    row_merged = row_new.to_dict()
+                                    old_obs = existing_dict[emp_val].get(col_obs_exist, "")
+                                    if old_obs:
+                                        row_merged[col_obs_new] = old_obs
+                                    final_rows.append(row_merged)
+                                else:
+                                    # NOVO E ATIVO: Adiciona como está
+                                    final_rows.append(row_new.to_dict())
+                            
+                            # 5. E os que estavam na planilha antiga mas NÃO no upload?
+                            # Preservamos contanto que:
+                            # - Não tenham sido atualizados por um ativo (processed_empenhos)
+                            # - Não estejam nos empenhos zerados do novo upload (empenhos_a_excluir)
+                            # - E não tenham saldo zerado na planilha antiga
+                            for emp_val, row_old in existing_dict.items():
+                                emp_val_clean = str(emp_val).strip()
+                                if emp_val_clean not in processed_empenhos and emp_val_clean not in empenhos_a_excluir:
+                                    # Se a coluna de saldo existir na base antiga, remove se estiver zerado
+                                    if col_saldo_exist:
+                                        saldo_old = row_old.get(col_saldo_exist, "")
+                                        if is_zero_value(saldo_old):
+                                            continue  # Ignora/exclui
+                                    final_rows.append(row_old)
 
-                        # 6. Salvar de volta
-                        df_final = pd.DataFrame(final_rows)
-                        df_final = df_final.fillna("")
-                        df_final = df_final.replace([np.inf, -np.inf], "")
-                        
-                        # Garantir que as colunas chaves estejam presentes e na ordem preferida (opcional, mas bom manter padrão)
-                        # Vamos usar as colunas do df_result como base para a ordem, adicionando extras se houver
-                        cols_order = df_result.columns.tolist()
-                        for c in df_final.columns:
-                            if c not in cols_order:
-                                cols_order.append(c)
-                                
-                        df_final = df_final[cols_order]
+                            # 6. Salvar de volta
+                            df_final = pd.DataFrame(final_rows)
+                            df_final = df_final.fillna("")
+                            df_final = df_final.replace([np.inf, -np.inf], "")
+                            
+                            # Ajustar colunas
+                            cols_order = df_result_active.columns.tolist()
+                            for c in df_final.columns:
+                                if c not in cols_order:
+                                    cols_order.append(c)
+                            df_final = df_final[cols_order]
 
-                        # Debug: mostrar o que será salvo
-                        st.info(f"📤 Salvando no Google Sheets: {len(df_final)} registros, {len(df_final.columns)} colunas")
-                        st.write("Colunas:", list(df_final.columns))
-                        
-                        # Debug detalhado: mostrar valores de exemplo das colunas monetárias
-                        with st.expander("🔍 Debug: Valores antes de salvar no Google Sheets"):
-                            # Encontrar colunas que parecem monetárias
-                            for col in df_final.columns:
-                                if any(palavra in col.lower() for palavra in ['saldo', 'valor', 'pagar']):
-                                    st.write(f"**{col}** (primeiros 3 valores):")
-                                    st.write(df_final[col].head(3).tolist())
-                                    st.write(f"Tipo de dados: {df_final[col].dtype}")
+                            # Debug e salvar no Google Sheets
+                            st.info(f"📤 Salvando no Google Sheets: {len(df_final)} registros, {len(df_final.columns)} colunas")
+                            
+                            with st.expander("🔍 Debug: Valores antes de salvar no Google Sheets"):
+                                for col in df_final.columns:
+                                    if any(palavra in col.lower() for palavra in ['saldo', 'valor', 'pagar']):
+                                        st.write(f"**{col}** (primeiros 3 valores):")
+                                        st.write(df_final[col].head(3).tolist())
+                                        st.write(f"Tipo de dados: {df_final[col].dtype}")
 
-                        ws.clear()
-                        # Substitui valores NaN (Not a Number) e NaT (Not a Time) por string vazia para as regras do JSON
-                        df_final = df_final.fillna("")
-                        ws.update([df_final.columns.values.tolist()] + df_final.values.tolist())
-                        st.success(f"Planilha atualizada com sucesso! {len(df_result)} registros processados. Observações preservadas.")
-
+                            ws.clear()
+                            ws.update([df_final.columns.values.tolist()] + df_final.values.tolist())
+                            st.success(f"Planilha atualizada com sucesso! Observações preservadas e empenhos zerados foram excluídos.")
             except Exception as e:
                 st.error(f"Erro ao processar atualização inteligente: {e}")
-                # Fallback: pergunta se quer sobrescrever? Melhor não arriscar dados.
             
             # --- Fim Lógica Merge ---
             
