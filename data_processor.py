@@ -196,31 +196,32 @@ def organize_sheet(file):
         today = datetime.now()
         
         col_tipo_name = result_df.columns[4]
+        col_valor_name = result_df.columns[8]
         col_saldo_name = result_df.columns[9]
         
         def determine_status(row):
-            # Identifica o tipo de empenho: remove espaços e coloca em maiúsculas
-            tipo = str(row[col_tipo_name]).strip().upper()
+            def parse_to_float(val):
+                if pd.isna(val) or val == "":
+                    return 0.0
+                if isinstance(val, (int, float)):
+                    return float(val)
+                try:
+                    val_str = str(val).strip().replace("R$", "").replace(" ", "")
+                    if "," in val_str and "." in val_str:
+                        val_str = val_str.replace(".", "").replace(",", ".")
+                    elif "," in val_str:
+                        val_str = val_str.replace(",", ".")
+                    return float(val_str)
+                except:
+                    return 0.0
+
+            saldo_val = parse_to_float(row[col_saldo_name])
+            valor_val = parse_to_float(row[col_valor_name])
             
-            # Se for Global (G) ou Estimativo (E)
-            if tipo in ['G', 'GLOBAL', 'E', 'ESTIMATIVO', 'ESTIMADO']:
-                # Se tiver saldo (maior que zero)
-                saldo_raw = row[col_saldo_name]
-                if isinstance(saldo_raw, (int, float)):
-                    saldo_val = float(saldo_raw)
-                else:
-                    try:
-                        val_str = str(saldo_raw).strip().replace("R$", "").replace(" ", "")
-                        if "," in val_str and "." in val_str:
-                            val_str = val_str.replace(".", "").replace(",", ".")
-                        elif "," in val_str:
-                            val_str = val_str.replace(",", ".")
-                        saldo_val = float(val_str)
-                    except:
-                        saldo_val = 0
-                
-                if saldo_val > 0.01:
-                    return "Em execução"
+            # Se o saldo do empenho comparado com o valor do empenho original 
+            # for diferente de zero e diferentes entre si, coloque em execução
+            if saldo_val > 0.01 and abs(saldo_val - valor_val) > 0.01:
+                return "Em execução"
             
             # Caso contrário, segue a lógica de 90 dias
             deadline = row["Prazo (90 dias)"]

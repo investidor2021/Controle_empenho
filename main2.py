@@ -860,7 +860,7 @@ if st.session_state.usuario: # Só mostra se estiver logado
         cols[3].markdown("**Fornecedor**")
         cols[4].markdown("**Histórico**")
         cols[5].markdown("**Valor**")
-        cols[6].markdown("**Saldo**")
+        cols[6].markdown("**Saldo a Pagar**")
         cols[7].markdown("**Prazo**")
         cols[8].markdown("**Status**")
         cols[9].markdown("**Observação**")
