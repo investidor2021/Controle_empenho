@@ -186,8 +186,8 @@ def organize_sheet(file):
         # result_df now has: Code(0), Dept(1), F(2), H(3)...
         # So col_f_name (which we grabbed before) is still valid as a reference to the source Series name.
         
-        # Convert to datetime
-        result_df[col_f_name] = pd.to_datetime(result_df[col_f_name], errors='coerce')
+        # Convert to datetime (with dayfirst=True for Brazilian format DD/MM/YYYY)
+        result_df[col_f_name] = pd.to_datetime(result_df[col_f_name], dayfirst=True, errors='coerce')
         
         # Calculate +90 days
         result_df["Prazo (90 dias)"] = result_df[col_f_name] + timedelta(days=90)
