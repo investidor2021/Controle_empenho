@@ -37,31 +37,10 @@ DEPARTAMENTOS = {
 
 def get_department_name(code):
     """
-    Returns the department name (or group name) based on the code.
-    Applied user rules:
-    - 01.02.01 to 01.02.13, 01.02.17 to 01.02.19, 01.02.22 to 01.02.24 -> "Movimento Geral"
-    - 01.02.14 -> "Educação"
-    - 01.02.15, 01.02.16 -> "Fundeb"
-    - 01.02.20 -> "Saúde"
-    - Others -> original department name or DEP-code
+    Returns the department name based on the code.
     """
     clean_code = str(code).strip()
     prefix = clean_code[:8]
-    
-    if prefix.startswith("01.02."):
-        try:
-            dep_num = int(prefix[6:8])
-            if (1 <= dep_num <= 13) or (17 <= dep_num <= 19) or (22 <= dep_num <= 24):
-                return "Movimento Geral"
-            elif dep_num == 14:
-                return "Educação"
-            elif dep_num in [15, 16]:
-                return "Fundeb"
-            elif dep_num == 20:
-                return "Saúde"
-        except ValueError:
-            pass
-            
     return DEPARTAMENTOS.get(prefix, f"DEP-{prefix}")
 
 def organize_sheet(file):
