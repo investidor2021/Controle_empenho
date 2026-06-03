@@ -140,8 +140,29 @@ def organize_sheet(file):
             
             return val
         
-        # Aplicar conversão em todas as colunas
+        # Aplicar conversão apenas nas colunas que não são identificadores, texto ou data
         for col in result_df.columns:
+            col_lower = col.lower()
+            
+            # Pular colunas de texto/data claras
+            if any(palavra in col_lower for palavra in ['data', 'prazo', 'status', 'departamento', 'observação', 'observacao', 'nome', 'histórico', 'historico', 'atividade', 'tipoempenho']):
+                continue
+                
+            # Pular identificadores/códigos (ex: número do empenho, código do fornecedor)
+            # Mas não se for valor/saldo do empenho
+            if "valor" not in col_lower and "saldo" not in col_lower and any(palavra in col_lower for palavra in ['empenho', 'emp.', 'emp', 'código', 'codigo', 'cod.', 'nº', 'numero', 'número']):
+                # Garantir que identificadores sejam strings limpas (ex: "164" em vez de "164.0")
+                def clean_id_val(val):
+                    if pd.isna(val):
+                        return ""
+                    val_str = str(val).strip()
+                    if val_str.endswith(".0"):
+                        val_str = val_str[:-2]
+                    return val_str
+                result_df[col] = result_df[col].apply(clean_id_val)
+                continue
+                
+            # Aplicar conversão brasileira decimal para float
             result_df[col] = result_df[col].apply(convert_brazilian_decimal)
         
         # Mostrar conversões realizadas
@@ -231,8 +252,8 @@ def organize_sheet(file):
                 continue
             
             # Pular colunas que são identificadores (números inteiros, não valores monetários)
-            # Ex: Número do Empenho, Código do Fornecedor
-            if any(palavra in col_lower for palavra in ['empenho', 'emp.', 'emp', 'código', 'codigo', 'cod.', 'nº', 'numero', 'número']):
+            # Ex: Número do Empenho, Código do Fornecedor (mas não se for valor/saldo!)
+            if "valor" not in col_lower and "saldo" not in col_lower and any(palavra in col_lower for palavra in ['empenho', 'emp.', 'emp', 'código', 'codigo', 'cod.', 'nº', 'numero', 'número']):
                 continue
                 
             # Verificar se é uma coluna numérica ou se contém palavras-chave que indicam valores monetários

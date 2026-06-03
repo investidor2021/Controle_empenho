@@ -162,6 +162,45 @@ def conectar_sheets():
         return None
 
 
+def normalize_empenho(val):
+    if pd.isna(val):
+        return ""
+    val_str = str(val).strip()
+    if val_str.endswith(".0"):
+        val_str = val_str[:-2]
+    return val_str
+
+
+def get_worksheet_data(ws):
+    """
+    Robust alternative to ws.get_all_records().
+    Retrieves all values and parses them into a list of dicts,
+    ignoring empty trailing columns and avoiding duplicate header errors.
+    """
+    all_values = ws.get_all_values()
+    if not all_values:
+        return []
+    
+    headers = all_values[0]
+    # Find last non-empty header
+    last_non_empty_idx = -1
+    for idx, h in enumerate(headers):
+        if str(h).strip() != "":
+            last_non_empty_idx = idx
+            
+    if last_non_empty_idx == -1:
+        return []
+        
+    valid_headers = [str(h).strip() for h in headers[:last_non_empty_idx + 1]]
+    records = []
+    for row in all_values[1:]:
+        row_trimmed = row[:last_non_empty_idx + 1]
+        row_trimmed += [""] * (len(valid_headers) - len(row_trimmed))
+        records.append(dict(zip(valid_headers, row_trimmed)))
+        
+    return records
+
+
 @st.cache_data(ttl=60) # Cache por 60 segundos para evitar recarregar toda hora
 def carregar_empenhos():
     ws = conectar_sheets()
@@ -170,7 +209,7 @@ def carregar_empenhos():
         return pd.DataFrame()
     
     try:
-        dados = ws.get_all_records()
+        dados = get_worksheet_data(ws)
         df = pd.DataFrame(dados)
         
         # Debug: mostrar informações sobre os dados carregados
@@ -238,7 +277,7 @@ def format_currency(val):
 def salvar_observacao(empenho, key):
     novo_texto = st.session_state[key]
     ws = conectar_sheets()
-    registros = ws.get_all_records()
+    registros = get_worksheet_data(ws)
 
     if not registros:
         return
@@ -260,7 +299,7 @@ def salvar_observacao(empenho, key):
     
     # Procurar linha do empenho
     for idx, reg in enumerate(registros):
-        if str(reg.get(cabecalho[col_empenho_idx])) == str(empenho):
+        if normalize_empenho(reg.get(cabecalho[col_empenho_idx])) == normalize_empenho(empenho):
             row_number = idx + 2  # +1 para base 1, +1 para pular cabeçalho
             # col_letter_obs = chr(65 + col_obs_idx)  # Converter índice para letra (A, B, C...) # Not used
             
@@ -302,7 +341,7 @@ if modo == "Organizador de Planilhas":
             # --- Lógica de Merge Inteligente com Exclusão de Zerados ---
             try:
                 # 1. Carregar dados existentes
-                existing_data = ws.get_all_records()
+                existing_data = get_worksheet_data(ws)
                 df_existing = pd.DataFrame(existing_data)
                 
                 # Identificar colunas chaves no novo arquivo
@@ -336,7 +375,7 @@ if modo == "Organizador de Planilhas":
                     df_result_zero = df_result[mask_zero].copy()
                     
                     # Guardar códigos de empenhos zerados do upload para excluir da planilha
-                    empenhos_a_excluir = set(df_result_zero[col_emp_new].astype(str).str.strip().tolist())
+                    empenhos_a_excluir = set(normalize_empenho(emp) for emp in df_result_zero[col_emp_new].tolist())
                     
                     # PREVENÇÃO CRÍTICA DE ERROS JSON (NaN, NaT, Infinity)
                     df_result_active.columns = [str(c) if pd.notna(c) else f"Coluna_Sem_Nome_{i}" for i, c in enumerate(df_result_active.columns)]
@@ -360,7 +399,7 @@ if modo == "Organizador de Planilhas":
                             st.error("Erro: Não foi possível identificar a coluna 'Empenho' na planilha do Google Sheets.")
                         else:
                             # 3. Converter base existente para dicionário
-                            existing_dict = {str(row[col_emp_exist]).strip(): row for _, row in df_existing.iterrows()}
+                            existing_dict = {normalize_empenho(row[col_emp_exist]): row for _, row in df_existing.iterrows()}
                             
                             # Lista final combinada
                             final_rows = []
@@ -368,7 +407,7 @@ if modo == "Organizador de Planilhas":
 
                             # 4. Iterar sobre o df de ativos
                             for _, row_new in df_result_active.iterrows():
-                                emp_val = str(row_new[col_emp_new]).strip()
+                                emp_val = normalize_empenho(row_new[col_emp_new])
                                 processed_empenhos.add(emp_val)
                                 
                                 if emp_val in existing_dict:
@@ -388,7 +427,7 @@ if modo == "Organizador de Planilhas":
                             # - Não estejam nos empenhos zerados do novo upload (empenhos_a_excluir)
                             # - E não tenham saldo zerado na planilha antiga
                             for emp_val, row_old in existing_dict.items():
-                                emp_val_clean = str(emp_val).strip()
+                                emp_val_clean = normalize_empenho(emp_val)
                                 if emp_val_clean not in processed_empenhos and emp_val_clean not in empenhos_a_excluir:
                                     # Se a coluna de saldo existir na base antiga, remove se estiver zerado
                                     if col_saldo_exist:
