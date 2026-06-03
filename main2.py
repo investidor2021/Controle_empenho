@@ -30,6 +30,63 @@ if "primeiro_acesso" not in st.session_state:
 st.sidebar.title("Acesso ao Sistema")
 
 if not st.session_state.usuario:
+    st.markdown("""
+    <style>
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.03); }
+        100% { transform: scale(1); }
+    }
+    .landing-card {
+        text-align: center;
+        margin: 8% auto;
+        max-width: 750px;
+        padding: 50px;
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        border-radius: 20px;
+        box-shadow: 0 15px 35px rgba(0,0,0,0.25);
+        color: white;
+        font-family: 'Inter', 'Outfit', sans-serif;
+    }
+    .landing-title {
+        font-size: 2.6rem;
+        margin-bottom: 20px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+    }
+    .landing-desc {
+        font-size: 1.2rem;
+        opacity: 0.9;
+        margin-bottom: 40px;
+        font-weight: 300;
+        line-height: 1.6;
+    }
+    .login-prompt {
+        display: inline-block;
+        padding: 15px 30px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 50px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        font-size: 1.1rem;
+        font-weight: 500;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+        animation: pulse 2.5s infinite ease-in-out;
+    }
+    </style>
+    
+    <div class="landing-card">
+        <h1 class="landing-title">🏛️ Acompanhamento de Empenhos</h1>
+        <p class="landing-desc">
+            Sistema inteligente e integrado para gestão de dotações, controle de prazos de empenhos e acompanhamento de forma simplificada.
+        </p>
+        <div class="login-prompt">
+            👈 Para acessar a ferramenta, por favor realize o login no <b>menu lateral esquerdo</b>.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     st.sidebar.title("Login")
     login_user = st.sidebar.text_input("Usuário")
     login_pass = st.sidebar.text_input("Senha", type="password")
