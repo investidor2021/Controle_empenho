@@ -581,7 +581,13 @@ if st.session_state.usuario: # Só mostra se estiver logado
     col_cod_forn = next((c for c in df.columns if any(x in c.lower() for x in ["código", "codigo", "cod."])), None)
     col_fornecedor = next((c for c in df.columns if any(x in c.lower() for x in ["nome", "razão", "fornecedor", "credor"]) and "código" not in c.lower() and "cod" not in c.lower()), None)
     col_historico = next((c for c in df.columns if any(x in c.lower() for x in ["historico", "histórico", "descrição"])), None)
-    col_saldo = next((c for c in df.columns if any(x in c.lower() for x in ["saldo", "valor", "pagar"])), None)
+    
+    # Evita que col_saldo coincida com 'valorEmpenho' (excluindo 'valor' da busca se 'saldo' ou 'pagar' estiver presente)
+    col_saldo = next((c for c in df.columns if any(x in c.lower() for x in ["saldo", "pagar"])), None)
+    if not col_saldo:
+        col_saldo = next((c for c in df.columns if "valor" in c.lower() and "empenho" not in c.lower()), None)
+        
+    col_valor = next((c for c in df.columns if "valor" in c.lower() and "empenho" in c.lower()), None)
     col_status = next((c for c in df.columns if "status" in c.lower()), None)
 
     # fallback se não achar específico
@@ -805,8 +811,8 @@ if st.session_state.usuario: # Só mostra se estiver logado
     else:
         # Cabeçalho da Tabela
         st.markdown("---")
-        # Layout: Emissao(1), Empenho(0.8), Cod(0.8), Nome(2), Hist(2.5), Saldo(1), Prazo(1), Status(1), Obs(1.5)
-        cols_spec = [1, 0.7, 0.7, 1.5, 2.5, 0.8, 0.8, 0.8, 1.2]
+        # Layout: Emissao(1), Empenho(0.7), Cod(0.7), Nome(1.5), Hist(2.3), Valor(0.8), Saldo(0.8), Prazo(0.8), Status(0.8), Obs(1.2)
+        cols_spec = [1, 0.7, 0.7, 1.5, 2.3, 0.8, 0.8, 0.8, 0.8, 1.2]
         cols = st.columns(cols_spec)
         
         cols[0].markdown("**Emissão**")
@@ -814,10 +820,11 @@ if st.session_state.usuario: # Só mostra se estiver logado
         cols[2].markdown("**Cód.**")
         cols[3].markdown("**Fornecedor**")
         cols[4].markdown("**Histórico**")
-        cols[5].markdown("**Saldo**")
-        cols[6].markdown("**Prazo**")
-        cols[7].markdown("**Status**")
-        cols[8].markdown("**Observação**")
+        cols[5].markdown("**Valor**")
+        cols[6].markdown("**Saldo**")
+        cols[7].markdown("**Prazo**")
+        cols[8].markdown("**Status**")
+        cols[9].markdown("**Observação**")
         
         st.markdown("---")
 
@@ -846,25 +853,29 @@ if st.session_state.usuario: # Só mostra se estiver logado
                     unsafe_allow_html=True
                 )
                 
-                # 6. Saldo (Formatado)
+                # 6. Valor Original (Formatado)
+                valor_raw = row.get(col_valor, "-") if col_valor else "-"
+                cols[5].caption(format_currency(valor_raw))
+                
+                # 7. Saldo (Formatado)
                 saldo_raw = row.get(col_saldo, "-")
-                cols[5].caption(format_currency(saldo_raw))
+                cols[6].caption(format_currency(saldo_raw))
     
-                # 7. Prazo
-                cols[6].caption(str(row.get("Prazo (90 dias)", "-")))
+                # 8. Prazo
+                cols[7].caption(str(row.get("Prazo (90 dias)", "-")))
     
-                # 8. Status
+                # 9. Status
                 status_val = row[col_status]
                 if status_val == "Vencido":
-                    cols[7].error(status_val)
+                    cols[8].error(status_val)
                 elif "Vence em" in str(status_val) or status_val == "Em execução":
-                    cols[7].warning(status_val)
+                    cols[8].warning(status_val)
                 else:
-                    cols[7].success(status_val)
+                    cols[8].success(status_val)
                     
-                # 9. Observação
+                # 10. Observação
                 obs_key = f"obs_{empenho_val}_ext"
-                cols[8].text_input(
+                cols[9].text_input(
                     "Obs",
                     value=row.get("Observação", ""),
                     key=obs_key,

@@ -90,7 +90,7 @@ def organize_sheet(file):
 
         # Extract specific columns using iloc
         # We start with D (3)
-        col_indices = [3, 5, 7, 8, 9, 10, 22, 35]
+        col_indices = [3, 5, 7, 8, 9, 10, 22, 27, 35]
         
         # Select data
         result_df = df.iloc[:, col_indices].copy()
@@ -175,7 +175,7 @@ def organize_sheet(file):
         today = datetime.now()
         
         col_tipo_name = result_df.columns[4]
-        col_saldo_name = result_df.columns[8]
+        col_saldo_name = result_df.columns[9]
         
         def determine_status(row):
             # Identifica o tipo de empenho: remove espaços e coloca em maiúsculas
