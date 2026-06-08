@@ -88,12 +88,55 @@ def organize_sheet(file):
         if df.shape[1] <= max_col_idx:
             return None, f"Erro: A planilha tem apenas {df.shape[1]} colunas, mas precisamos da coluna AJ (índice 35)."
 
+        # Extrair "Pedido de Compra" robustamente (da mesma linha ou da linha de baixo)
+        import re
+        pattern = r'(?:pedido\s*de\s*compra|processo\s*de\s*compra(?:\s*:\s*pedido)?|pedido|ordem\s*de\s*compra|oc)\s*(?:n[ºo\.]|:|\s)*\s*(\d+(?:[/-]\d+)?)\b'
+        
+        pedidos_compra = []
+        for i in range(len(df)):
+            emp_val = str(df.iloc[i, 7]).strip() if df.shape[1] > 7 else ""
+            if emp_val and emp_val != "nan" and emp_val != "":
+                # 1. Tentar encontrar na própria linha (coluna índice 22 - historico)
+                hist_val = str(df.iloc[i, 22]).strip() if df.shape[1] > 22 else ""
+                pedido = ""
+                
+                match = re.search(pattern, hist_val, re.IGNORECASE)
+                if match:
+                    pedido = match.group(1)
+                
+                # 2. Se não achou na própria linha, verificar a linha de baixo (i+1) se ela não tiver número de empenho
+                if not pedido and i + 1 < len(df):
+                    next_emp = str(df.iloc[i + 1, 7]).strip() if df.shape[1] > 7 else ""
+                    if not next_emp or next_emp == "nan" or next_emp == "":
+                        # Procurar em todas as colunas da linha de baixo
+                        for col_idx in range(df.shape[1]):
+                            cell_val = str(df.iloc[i + 1, col_idx]).strip()
+                            if cell_val and cell_val != "nan":
+                                match_next = re.search(pattern, cell_val, re.IGNORECASE)
+                                if match_next:
+                                    pedido = match_next.group(1)
+                                    break
+                
+                pedidos_compra.append(pedido)
+            else:
+                pedidos_compra.append("")
+                
+        df["Pedido de Compra"] = pedidos_compra
+
         # Extract specific columns using iloc
         # We start with D (3)
         col_indices = [3, 5, 7, 8, 9, 10, 22, 27, 35]
         
         # Select data
         result_df = df.iloc[:, col_indices].copy()
+        
+        # Associar o "Pedido de Compra" mapeado para o index correto
+        result_df["Pedido de Compra"] = [pedidos_compra[idx] for idx in result_df.index]
+        
+        # Filtrar para manter apenas as linhas com empenho válido (ignorar sub-linhas vazias após extrair os dados delas)
+        col_emp_temp = next((c for c in result_df.columns if "empenho" in c.lower()), None)
+        if col_emp_temp:
+            result_df = result_df[result_df[col_emp_temp].astype(str).str.strip().replace("nan", "") != ""].copy()
         
         # CRÍTICO: Converter valores com vírgula decimal (formato brasileiro) para float
         # O Excel salva valores como "18500,51" ou "13412,43" (strings com vírgula decimal)

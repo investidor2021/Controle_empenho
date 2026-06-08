@@ -310,6 +310,7 @@ def salvar_observacao(empenho, key):
             ws.update_cell(row_number, col_obs_idx + 1, texto_com_timestamp)
             st.success(f"Observação salva para empenho {empenho}!")
             time.sleep(1)
+            st.cache_data.clear() # Limpar cache para forçar recarregamento do Google Sheets
             st.rerun()
             return
     
@@ -460,6 +461,7 @@ if modo == "Organizador de Planilhas":
 
                             ws.clear()
                             ws.update([df_final.columns.values.tolist()] + df_final.values.tolist())
+                            st.cache_data.clear() # Limpar o cache para refletir a nova planilha no acompanhamento
                             st.success(f"Planilha atualizada com sucesso! Observações preservadas e empenhos zerados foram excluídos.")
             except Exception as e:
                 st.error(f"Erro ao processar atualização inteligente: {e}")
@@ -587,6 +589,12 @@ if st.session_state.usuario: # Só mostra se estiver logado
     # FILTROS AVANÇADOS (SIDEBAR)
     # ---------------------------
     st.sidebar.divider()
+    
+    # Botão para recarregar dados limpando cache
+    if st.sidebar.button("🔄 Atualizar Dados", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+        
     st.sidebar.markdown("### 🔍 Filtros")
     
     filtro_empenho = st.sidebar.text_input("Empenho", placeholder="Ex: 1234")
@@ -628,6 +636,7 @@ if st.session_state.usuario: # Só mostra se estiver logado
         
     col_valor = next((c for c in df.columns if "valor" in c.lower() and "empenho" in c.lower()), None)
     col_status = next((c for c in df.columns if "status" in c.lower()), None)
+    col_obs = next((c for c in df.columns if "observação" in c.lower() or "observacao" in c.lower()), None)
 
     # fallback se não achar específico
     if not col_fornecedor: 
@@ -850,8 +859,8 @@ if st.session_state.usuario: # Só mostra se estiver logado
     else:
         # Cabeçalho da Tabela
         st.markdown("---")
-        # Layout: Emissao(1), Empenho(0.7), Cod(0.7), Nome(1.5), Hist(2.3), Valor(0.8), Saldo(0.8), Prazo(0.8), Status(0.8), Obs(1.2)
-        cols_spec = [1, 0.7, 0.7, 1.5, 2.3, 0.8, 0.8, 0.8, 0.8, 1.2]
+        # Layout: Emissao(1.0), Empenho(0.7), Cod(0.7), Nome(1.6), Hist(2.5), Valor(0.9), Saldo(0.9), Prazo(0.9), Status(0.9)
+        cols_spec = [1.0, 0.7, 0.7, 1.6, 2.5, 0.9, 0.9, 0.9, 0.9]
         cols = st.columns(cols_spec)
         
         cols[0].markdown("**Emissão**")
@@ -863,7 +872,6 @@ if st.session_state.usuario: # Só mostra se estiver logado
         cols[6].markdown("**Saldo a Pagar**")
         cols[7].markdown("**Prazo**")
         cols[8].markdown("**Status**")
-        cols[9].markdown("**Observação**")
         
         st.markdown("---")
 
@@ -912,13 +920,25 @@ if st.session_state.usuario: # Só mostra se estiver logado
                 else:
                     cols[8].success(status_val)
                     
-                # 10. Observação
+                # Linha de baixo: Pedido de Compra e Observação
+                col_sub1, col_sub2 = st.columns([2.5, 7.5])
+                
+                pedido_compra = row.get("Pedido de Compra", "")
+                if pedido_compra and str(pedido_compra).strip() != "" and str(pedido_compra).strip().lower() != "nan":
+                    col_sub1.markdown(f"📦 **Pedido de Compra:** {pedido_compra}")
+                else:
+                    col_sub1.markdown("")
+                    
                 obs_key = f"obs_{empenho_val}_ext"
-                cols[9].text_input(
-                    "Obs",
-                    value=row.get("Observação", ""),
+                obs_val = row.get(col_obs, "") if col_obs else ""
+                
+                # Input de texto para observação com placeholder explicativo
+                col_sub2.text_input(
+                    "Observação",
+                    value=obs_val,
                     key=obs_key,
                     label_visibility="collapsed",
+                    placeholder="Clique aqui para digitar uma observação sobre este empenho...",
                     on_change=lambda k=obs_key, e=empenho_val: salvar_observacao(e, k),
                 )
                 
