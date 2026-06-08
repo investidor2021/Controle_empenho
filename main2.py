@@ -504,19 +504,20 @@ if modo == "Gerenciar Usuários" and st.session_state.perfil == "Administrador":
         
         # Carregar departamentos do data_processor
         lista_deptos = sorted(list(data_processor.DEPARTAMENTOS.values()))
-        new_depto = st.selectbox("Departamento", lista_deptos)
+        new_deptos = st.multiselect("Departamentos", lista_deptos, placeholder="Selecione um ou mais departamentos")
         
         submitted = st.form_submit_button("Cadastrar")
         
         if submitted:
-            if new_user and new_pass:
-                ok, msg = auth_manager.cadastrar_usuario(new_user.strip(), new_pass, new_perfil, new_depto)
+            if new_user and new_pass and new_deptos:
+                depto_string = "; ".join(new_deptos)
+                ok, msg = auth_manager.cadastrar_usuario(new_user.strip(), new_pass, new_perfil, depto_string)
                 if ok:
                     st.success(msg)
                 else:
                     st.error(msg)
             else:
-                st.warning("Preencha todos os campos.")
+                st.warning("Preencha todos os campos. Selecione ao menos um departamento.")
                 
     st.divider()
     st.markdown("### 🔄 Redefinir Senha de Usuário")
@@ -573,14 +574,22 @@ if st.session_state.usuario: # Só mostra se estiver logado
     st.divider()
     st.markdown("## 📋 Acompanhamento de Empenhos")
 
+    # Separar os departamentos do usuário (suporta múltiplos separados por ponto e vírgula ou vírgula)
+    deptos_usuario_raw = st.session_state.departamento or ""
+    deptos_usuario = [d.strip() for d in deptos_usuario_raw.replace(",", ";").split(";") if d.strip()]
+    
     if st.session_state.perfil == "Administrador":
         # Admin pode escolher qualquer departamento
         opcoes_depto = ["Todos"] + list(data_processor.DEPARTAMENTOS.values())
         departamento_selecionado = st.selectbox("Filtrar por Departamento", opcoes_depto)
     else:
-        # Usuário vê apenas o seu
-        departamento_selecionado = st.session_state.departamento
-        st.info(f"Visualizando empenhos para: **{departamento_selecionado}**")
+        # Usuário comum
+        if len(deptos_usuario) > 1:
+            opcoes_depto = ["Todos os meus Deptos"] + deptos_usuario
+            departamento_selecionado = st.selectbox("Filtrar por Departamento", opcoes_depto)
+        else:
+            departamento_selecionado = deptos_usuario[0] if deptos_usuario else ""
+            st.info(f"Visualizando empenhos para: **{departamento_selecionado}**")
 
     # Carregar e filtrar dados
     df = carregar_empenhos()
@@ -614,13 +623,19 @@ if st.session_state.usuario: # Só mostra se estiver logado
     # APLICAÇÃO DOS FILTROS
     # ---------------------------
     
-    # 1. Filtro de Departamento (Já existente)
-    if departamento_selecionado != "Todos":
-        # Verificar se a coluna existe antes de filtrar
-        if "Departamento (De/Para)" in df.columns:
-            df = df[df["Departamento (De/Para)"] == departamento_selecionado]
+    # 1. Filtro de Departamento
+    if "Departamento (De/Para)" in df.columns:
+        if st.session_state.perfil == "Administrador":
+            if departamento_selecionado != "Todos":
+                df = df[df["Departamento (De/Para)"] == departamento_selecionado]
         else:
-            st.warning("⚠️ A coluna 'Departamento (De/Para)' não foi encontrada. Faça upload da planilha pelo 'Organizador de Planilhas' primeiro.")
+            # Usuário comum
+            if departamento_selecionado == "Todos os meus Deptos":
+                df = df[df["Departamento (De/Para)"].isin(deptos_usuario)]
+            elif departamento_selecionado != "":
+                df = df[df["Departamento (De/Para)"] == departamento_selecionado]
+    else:
+        st.warning("⚠️ A coluna 'Departamento (De/Para)' não foi encontrada. Faça upload da planilha pelo 'Organizador de Planilhas' primeiro.")
 
     # Detectar colunas para evitar KeyError (necessário antes de filtrar por elas)
     col_emissao = next((c for c in df.columns if any(x in c.lower() for x in ["emissao", "emissão", "data"])), None)
