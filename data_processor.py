@@ -96,15 +96,47 @@ def organize_sheet(file):
         for i in range(len(df)):
             emp_val = str(df.iloc[i, 7]).strip() if df.shape[1] > 7 else ""
             if emp_val and emp_val != "nan" and emp_val != "":
-                # 1. Tentar encontrar na própria linha (coluna índice 22 - historico)
-                hist_val = str(df.iloc[i, 22]).strip() if df.shape[1] > 22 else ""
                 pedido = ""
+                # 1. Tentar pegar das colunas dedicadas na própria linha (coluna 38/index 37 = numeroPedido, coluna 37/index 36 = anoPedido)
+                num_ped = str(df.iloc[i, 37]).strip() if df.shape[1] > 37 else ""
+                ano_ped = str(df.iloc[i, 36]).strip() if df.shape[1] > 36 else ""
                 
-                match = re.search(pattern, hist_val, re.IGNORECASE)
-                if match:
-                    pedido = match.group(1)
+                # Tratar valores vazios ou "0" ou "nan"
+                if num_ped and num_ped != "nan" and num_ped != "0" and num_ped != "":
+                    if num_ped.endswith(".0"):
+                        num_ped = num_ped[:-2]
+                    if ano_ped and ano_ped != "nan" and ano_ped != "0" and ano_ped != "":
+                        if ano_ped.endswith(".0"):
+                            ano_ped = ano_ped[:-2]
+                        pedido = f"{num_ped}/{ano_ped}"
+                    else:
+                        pedido = num_ped
                 
-                # 2. Se não achou na própria linha, verificar a linha de baixo (i+1) se ela não tiver número de empenho
+                # 2. Se não achou na própria linha, verificar a linha de baixo (i+1) nas mesmas colunas (se ela não tiver número de empenho)
+                if not pedido and i + 1 < len(df):
+                    next_emp = str(df.iloc[i + 1, 7]).strip() if df.shape[1] > 7 else ""
+                    if not next_emp or next_emp == "nan" or next_emp == "":
+                        num_ped_next = str(df.iloc[i + 1, 37]).strip() if df.shape[1] > 37 else ""
+                        ano_ped_next = str(df.iloc[i + 1, 36]).strip() if df.shape[1] > 36 else ""
+                        
+                        if num_ped_next and num_ped_next != "nan" and num_ped_next != "0" and num_ped_next != "":
+                            if num_ped_next.endswith(".0"):
+                                num_ped_next = num_ped_next[:-2]
+                            if ano_ped_next and ano_ped_next != "nan" and ano_ped_next != "0" and ano_ped_next != "":
+                                if ano_ped_next.endswith(".0"):
+                                    ano_ped_next = ano_ped_next[:-2]
+                                pedido = f"{num_ped_next}/{ano_ped_next}"
+                            else:
+                                pedido = num_ped_next
+                
+                # 3. Fallback: Procurar no histórico da própria linha por regex
+                if not pedido:
+                    hist_val = str(df.iloc[i, 22]).strip() if df.shape[1] > 22 else ""
+                    match = re.search(pattern, hist_val, re.IGNORECASE)
+                    if match:
+                        pedido = match.group(1)
+                
+                # 4. Fallback 2: Procurar em todas as colunas da linha de baixo por regex (se ela não tiver número de empenho)
                 if not pedido and i + 1 < len(df):
                     next_emp = str(df.iloc[i + 1, 7]).strip() if df.shape[1] > 7 else ""
                     if not next_emp or next_emp == "nan" or next_emp == "":
@@ -176,7 +208,7 @@ def organize_sheet(file):
                     result = float(val_clean)
                     # Debug: registrar conversões de valores monetários
                     if result > 100:  # Provavelmente valor monetário
-                        debug_conversions.append(f"{original_val} → {result}")
+                        debug_conversions.append(f"{original_val} -> {result}")
                     return result
                 except ValueError:
                     return val  # Se não conseguir converter, retorna original
@@ -210,7 +242,7 @@ def organize_sheet(file):
         
         # Mostrar conversões realizadas
         if debug_conversions:
-            print("🔍 DEBUG - Conversões realizadas:")
+            print("[DEBUG] Conversoes realizadas:")
             for conv in debug_conversions[:10]:  # Mostrar primeiras 10
                 print(f"  {conv}")
         
