@@ -1169,6 +1169,7 @@ if st.session_state.usuario: # Só mostra se estiver logado
                         key=upload_key,
                         label_visibility="collapsed",
                     )
+                    col_sub3.markdown("<div style='font-size: 11px; opacity: 0.7; text-align: center; margin-top: -6px;'>Lembrete: notas, memorando</div>", unsafe_allow_html=True)
                     if uploaded_file:
                         salvar_anexo_process(empenho_val, uploaded_file)
                 
