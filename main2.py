@@ -15,6 +15,69 @@ import time
 # Move page config to top (done in previous chunk)
 st.set_page_config(layout="wide")
 
+# Estilos CSS personalizados para tornar a interface mais limpa e compacta (incluindo botões de anexo)
+st.markdown("""
+<style>
+/* Tornar o widget de upload de arquivo (st.file_uploader) super compacto e horizontal */
+div[data-testid="stFileUploader"] {
+    padding: 0px !important;
+    margin: 0px !important;
+}
+div[data-testid="stFileUploader"] section[data-testid="stFileUploadDropzone"] {
+    padding: 4px 10px !important;
+    min-height: 38px !important;
+    flex-direction: row !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 8px !important;
+    border-radius: 6px !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    border: 1px dashed rgba(255, 255, 255, 0.2) !important;
+}
+/* Ocultar a descrição do limite de tamanho para economizar espaço vertical */
+div[data-testid="stFileUploader"] section[data-testid="stFileUploadDropzone"] small {
+    display: none !important;
+}
+/* Reduzir o tamanho da fonte do texto dentro da área de dropzone */
+div[data-testid="stFileUploader"] section[data-testid="stFileUploadDropzone"] div {
+    font-size: 11px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+}
+/* Estilizar o botão Browse Files para ficar menor e elegante */
+div[data-testid="stFileUploader"] section[data-testid="stFileUploadDropzone"] button {
+    padding: 2px 6px !important;
+    font-size: 11px !important;
+    min-height: 26px !important;
+    line-height: 1.2 !important;
+}
+
+/* Tornar o botão de link e os botões padrão menores e mais ajustados na tabela */
+div[data-testid="stLinkButton"] a {
+    padding: 4px 10px !important;
+    font-size: 12px !important;
+    min-height: 28px !important;
+    height: 28px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 6px !important;
+}
+/* Botão normal (como o botão de excluir) */
+div[data-testid="stBaseButton-secondary"] button {
+    padding: 4px 10px !important;
+    font-size: 12px !important;
+    min-height: 28px !important;
+    height: 28px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 6px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 if "usuario" not in st.session_state:
     st.session_state.usuario = None
 if "perfil" not in st.session_state:
@@ -1069,7 +1132,7 @@ if st.session_state.usuario: # Só mostra se estiver logado
                     cols[8].success(status_val)
                     
                 # Linha de baixo: Pedido de Compra, Observação e Anexo
-                col_sub1, col_sub2, col_sub3 = st.columns([2.5, 5.0, 3.5])
+                col_sub1, col_sub2, col_sub3 = st.columns([2.5, 6.0, 2.5])
                 
                 pedido_compra = row.get("Pedido de Compra", "")
                 if pedido_compra and str(pedido_compra).strip() != "" and str(pedido_compra).strip().lower() != "nan":
