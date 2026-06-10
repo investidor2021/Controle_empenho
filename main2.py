@@ -317,11 +317,109 @@ def salvar_observacao(empenho, key):
     st.error(f"Empenho {empenho} não encontrado.")
 
 
+def extrair_id_drive(url):
+    if not url:
+        return None
+    import re
+    match = re.search(r'/d/([^/&?]+)', str(url))
+    if match:
+        return match.group(1)
+    if len(str(url)) > 20 and "/" not in str(url):
+        return str(url)
+    return None
+
+def salvar_link_anexo(empenho, link):
+    ws = conectar_sheets()
+    if not ws:
+        return False
+    try:
+        registros = get_worksheet_data(ws)
+    except Exception as e:
+        st.error(f"Erro ao ler registros para salvar anexo: {e}")
+        return False
+
+    if not registros:
+        return False
+
+    cabecalho = list(registros[0].keys())
+    col_empenho_idx = next((i for i, c in enumerate(cabecalho) if "empenho" in c.lower()), -1)
+    col_anexo_idx = next((i for i, c in enumerate(cabecalho) if "anexo" in c.lower()), -1)
+    
+    if col_empenho_idx == -1:
+        st.error("Não foi possível encontrar a coluna de Empenho.")
+        return False
+        
+    if col_anexo_idx == -1:
+        # Se não existe a coluna "Anexo", vamos adicioná-la no final do cabeçalho da planilha
+        try:
+            ws.update_cell(1, len(cabecalho) + 1, "Anexo")
+            col_anexo_idx = len(cabecalho)
+        except Exception as e:
+            st.error(f"Erro ao criar coluna 'Anexo': {e}")
+            return False
+
+    # Procurar linha do empenho
+    for idx, reg in enumerate(registros):
+        if normalize_empenho(reg.get(cabecalho[col_empenho_idx])) == normalize_empenho(empenho):
+            row_number = idx + 2  # +1 para base 1, +1 para pular cabeçalho
+            try:
+                ws.update_cell(row_number, col_anexo_idx + 1, link)
+                st.cache_data.clear() # Limpar cache
+                return True
+            except Exception as e:
+                st.error(f"Erro ao salvar link do anexo no Sheets: {e}")
+                return False
+    
+    st.error(f"Empenho {empenho} não encontrado para salvar anexo.")
+    return False
+
+def salvar_anexo_process(empenho, uploaded_file):
+    if uploaded_file is None:
+        return
+        
+    folder_id = auth_manager.obter_configuracao("DRIVE_FOLDER_ID", "1qLk6PQXHtr987d6csDrQD5U2YmE74zp3")
+    if not folder_id:
+        st.error("Erro: A pasta do Google Drive não está configurada.")
+        return
+        
+    nome_original = uploaded_file.name
+    ext = nome_original.split('.')[-1] if '.' in nome_original else 'pdf'
+    nome_arquivo_drive = f"Anexo_Empenho_{empenho}.{ext}"
+    
+    file_bytes = uploaded_file.read()
+    mime_type = uploaded_file.type
+    
+    link_anexo, err = auth_manager.upload_para_drive(file_bytes, nome_arquivo_drive, mime_type, folder_id)
+    
+    if err:
+        st.error(err)
+        return
+        
+    if salvar_link_anexo(empenho, link_anexo):
+        st.success(f"Documento anexado com sucesso para o empenho {empenho}!")
+        time.sleep(1)
+        st.cache_data.clear()
+        st.rerun()
+
+def deletar_anexo_process(empenho, url):
+    file_id = extrair_id_drive(url)
+    if file_id:
+        success, err = auth_manager.deletar_do_drive(file_id)
+        if not success:
+            st.error(f"Erro ao remover do Drive: {err}. Limpando link na planilha mesmo assim...")
+            
+    if salvar_link_anexo(empenho, ""):
+        st.success(f"Anexo removido do empenho {empenho}!")
+        time.sleep(1)
+        st.cache_data.clear()
+        st.rerun()
+
+
 # ===============================
 # NAVEGAÇÃO
 # ===============================
 if st.session_state.perfil == "Administrador":
-    modo = st.sidebar.radio("Ferramenta", ["Gerador de Documentos", "Organizador de Planilhas", "Gerenciar Usuários"])
+    modo = st.sidebar.radio("Ferramenta", ["Gerador de Documentos", "Organizador de Planilhas", "Gerenciar Usuários", "Configurações"])
 else:
     modo = "Gerador de Documentos" # Usuário padrão só vê isso
 
@@ -412,11 +510,18 @@ if modo == "Organizador de Planilhas":
                                 processed_empenhos.add(emp_val)
                                 
                                 if emp_val in existing_dict:
-                                    # JÁ EXISTE E ATIVO: Atualiza dados, mas PRESERVA observação antiga
+                                    # JÁ EXISTE E ATIVO: Atualiza dados, mas PRESERVA observação antiga e anexo
                                     row_merged = row_new.to_dict()
                                     old_obs = existing_dict[emp_val].get(col_obs_exist, "")
                                     if old_obs:
                                         row_merged[col_obs_new] = old_obs
+                                    
+                                    col_anexo_exist = next((c for c in df_existing.columns if "anexo" in c.lower()), None)
+                                    col_anexo_new = "Anexo"
+                                    if col_anexo_exist:
+                                        old_anexo = existing_dict[emp_val].get(col_anexo_exist, "")
+                                        if old_anexo:
+                                            row_merged[col_anexo_new] = old_anexo
                                     final_rows.append(row_merged)
                                 else:
                                     # NOVO E ATIVO: Adiciona como está
@@ -565,8 +670,33 @@ if modo == "Gerenciar Usuários" and st.session_state.perfil == "Administrador":
                     st.error(msg)
             else:
                 st.warning("Selecione um usuário para ser redefinido.")
-                    
-                    
+if modo == "Configurações" and st.session_state.perfil == "Administrador":
+    st.title("⚙️ Configurações do Sistema")
+    st.markdown("Gerencie as configurações globais de integração.")
+    
+    # Obter o ID da pasta padrão pré-configurado ou o ID enviado pelo usuário
+    pasta_atual = auth_manager.obter_configuracao("DRIVE_FOLDER_ID", "1qLk6PQXHtr987d6csDrQD5U2YmE74zp3")
+    
+    with st.form("form_configuracoes"):
+        drive_folder_id = st.text_input("ID da Pasta do Google Drive (para Anexos)", value=pasta_atual, placeholder="Cole o ID da pasta do Google Drive")
+        st.caption("ℹ️ O ID da pasta do Drive é o código que aparece no final da URL ao abrir a pasta no navegador (ex: 1qLk6PQXHtr987d6csDrQD5U2YmE74zp3)")
+        
+        submitted_config = st.form_submit_button("Salvar Configurações")
+        
+        if submitted_config:
+            # Limpar espaços e possíveis parâmetros de query (?hl=...)
+            clean_id = drive_folder_id.split('?')[0].strip() if drive_folder_id else ""
+            if clean_id:
+                if auth_manager.salvar_configuracao("DRIVE_FOLDER_ID", clean_id):
+                    st.success("Configurações salvas com sucesso no Google Sheets!")
+                else:
+                    st.error("Erro ao salvar configurações no Google Sheets.")
+            else:
+                st.warning("O ID da pasta do Drive não pode ser vazio.")
+                
+    st.stop()
+
+
 # ===============================
 # VISUALIZAÇÃO DE EMPENHOS
 # ===============================
@@ -652,6 +782,9 @@ if st.session_state.usuario: # Só mostra se estiver logado
     col_valor = next((c for c in df.columns if "valor" in c.lower() and "empenho" in c.lower()), None)
     col_status = next((c for c in df.columns if "status" in c.lower()), None)
     col_obs = next((c for c in df.columns if "observação" in c.lower() or "observacao" in c.lower()), None)
+    col_anexo = next((c for c in df.columns if "anexo" in c.lower()), None)
+
+
 
     # fallback se não achar específico
     if not col_fornecedor: 
@@ -935,8 +1068,8 @@ if st.session_state.usuario: # Só mostra se estiver logado
                 else:
                     cols[8].success(status_val)
                     
-                # Linha de baixo: Pedido de Compra e Observação
-                col_sub1, col_sub2 = st.columns([2.5, 7.5])
+                # Linha de baixo: Pedido de Compra, Observação e Anexo
+                col_sub1, col_sub2, col_sub3 = st.columns([2.5, 5.0, 3.5])
                 
                 pedido_compra = row.get("Pedido de Compra", "")
                 if pedido_compra and str(pedido_compra).strip() != "" and str(pedido_compra).strip().lower() != "nan":
@@ -956,6 +1089,25 @@ if st.session_state.usuario: # Só mostra se estiver logado
                     placeholder="Clique aqui para digitar uma observação sobre este empenho...",
                     on_change=lambda k=obs_key, e=empenho_val: salvar_observacao(e, k),
                 )
+                
+                # Lógica do Anexo (Upload / Visualização)
+                anexo_val = row.get(col_anexo, "") if col_anexo else ""
+                
+                if anexo_val and str(anexo_val).strip() != "" and str(anexo_val).strip().lower() != "nan":
+                    c_link, c_del = col_sub3.columns([4, 1])
+                    c_link.link_button("📄 Ver Anexo", str(anexo_val), use_container_width=True)
+                    if c_del.button("❌", key=f"del_anexo_{empenho_val}", help="Remover Anexo"):
+                        deletar_anexo_process(empenho_val, anexo_val)
+                else:
+                    upload_key = f"upload_{empenho_val}"
+                    uploaded_file = col_sub3.file_uploader(
+                        "Anexar Nota/PDF",
+                        type=["pdf", "png", "jpg", "jpeg"],
+                        key=upload_key,
+                        label_visibility="collapsed",
+                    )
+                    if uploaded_file:
+                        salvar_anexo_process(empenho_val, uploaded_file)
                 
                 st.divider()
     

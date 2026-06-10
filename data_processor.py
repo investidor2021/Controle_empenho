@@ -349,6 +349,10 @@ def organize_sheet(file):
             # Garantir coluna Observação
             result_df["Observação"] = ""
             
+        if "Anexo" not in result_df.columns:
+            # Garantir coluna Anexo
+            result_df["Anexo"] = ""
+            
         return result_df, None
 
 

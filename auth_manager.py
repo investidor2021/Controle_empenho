@@ -2,6 +2,12 @@
 import gspread
 import hashlib
 import streamlit as st
+import io
+import re
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+
 
 def conectar_sheets():
     """Conecta ao Google Sheets e retorna a planilha principal."""
@@ -205,3 +211,126 @@ def get_all_users():
     except Exception as e:
         st.error(f"Erro ao buscar usuários: {e}")
         return []
+
+def conectar_drive():
+    """Conecta ao Google Drive API e retorna o serviço."""
+    try:
+        if "gcp_service_account" in st.secrets:
+            credentials_dict = dict(st.secrets["gcp_service_account"])
+            scopes = ['https://www.googleapis.com/auth/drive']
+            creds = Credentials.from_service_account_info(credentials_dict, scopes=scopes)
+        else:
+            scopes = ['https://www.googleapis.com/auth/drive']
+            creds = Credentials.from_service_account_file("credenciais.json", scopes=scopes)
+        return build('drive', 'v3', credentials=creds)
+    except Exception as e:
+        st.error(f"Erro ao conectar ao Google Drive API: {e}")
+        return None
+
+def upload_para_drive(file_bytes, file_name, mime_type, folder_id):
+    """
+    Realiza o upload de um arquivo para o Google Drive.
+    Retorna (link_visualizacao, erro).
+    """
+    service = conectar_drive()
+    if not service:
+        return None, "Não foi possível conectar ao Google Drive."
+    
+    try:
+        # Remover parâmetros de query se vierem no folder_id (como ?hl no ID enviado pelo usuário)
+        clean_folder_id = folder_id.split('?')[0].strip() if folder_id else ""
+        
+        file_metadata = {
+            'name': file_name,
+            'parents': [clean_folder_id]
+        }
+        
+        media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=mime_type, resumable=True)
+        
+        file_drive = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields='id, webViewLink'
+        ).execute()
+        
+        # Alterar a permissão do arquivo para que qualquer pessoa com o link possa ler
+        try:
+            user_permission = {
+                'type': 'anyone',
+                'role': 'reader',
+            }
+            service.permissions().create(
+                fileId=file_drive.get('id'),
+                body=user_permission,
+                fields='id',
+            ).execute()
+        except Exception as perm_err:
+            st.warning(f"Aviso: Não foi possível definir permissões de leitura pública: {perm_err}")
+            
+        return file_drive.get('webViewLink'), None
+    except Exception as e:
+        return None, f"Erro no upload para o Drive: {str(e)}"
+
+def deletar_do_drive(file_id):
+    """Deleta um arquivo do Google Drive."""
+    service = conectar_drive()
+    if not service:
+        return False, "Não foi possível conectar ao Google Drive."
+    try:
+        service.files().delete(fileId=file_id).execute()
+        return True, None
+    except Exception as e:
+        return False, f"Erro ao deletar arquivo do Drive: {str(e)}"
+
+def obter_configuracao(chave, default=""):
+    """Recupera uma configuração persistente armazenada na aba 'configuracoes' da planilha."""
+    sh = conectar_sheets()
+    if not sh:
+        return default
+    try:
+        try:
+            ws = sh.worksheet("configuracoes")
+        except gspread.WorksheetNotFound:
+            # Se não existir a aba, criamos e retornamos o padrão
+            ws = sh.add_worksheet(title="configuracoes", rows=10, cols=2)
+            ws.append_row(["Chave", "Valor"])
+            ws.append_row([chave, default])
+            return default
+            
+        registros = ws.get_all_records()
+        for r in registros:
+            if str(r.get("Chave", "")).strip() == chave:
+                return str(r.get("Valor", "")).strip()
+    except Exception:
+        pass
+    return default
+
+def salvar_configuracao(chave, valor):
+    """Salva uma configuração persistente na aba 'configuracoes' da planilha."""
+    sh = conectar_sheets()
+    if not sh:
+        return False
+    try:
+        try:
+            ws = sh.worksheet("configuracoes")
+        except gspread.WorksheetNotFound:
+            ws = sh.add_worksheet(title="configuracoes", rows=10, cols=2)
+            ws.append_row(["Chave", "Valor"])
+            
+        registros = ws.get_all_records()
+        col_chave_idx = 1
+        col_valor_idx = 2
+        
+        for idx, r in enumerate(registros):
+            if str(r.get("Chave", "")).strip() == chave:
+                row_number = idx + 2 # +1 cabeçalho, +1 index base 1
+                ws.update_cell(row_number, col_valor_idx, valor)
+                return True
+                
+        # Se não encontrou, insere uma nova linha
+        ws.append_row([chave, valor])
+        return True
+    except Exception as e:
+        st.error(f"Erro ao salvar configuração: {e}")
+        return False
+
