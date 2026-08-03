@@ -564,21 +564,19 @@ if modo == "Organizador de Planilhas":
                         if not col_emp_exist:
                             st.error("Erro: Não foi possível identificar a coluna 'Empenho' na planilha do Google Sheets.")
                         else:
-                            # 3. Converter base existente para dicionário
+                            # 3. Converter base existente para dicionário para preservar Observações e Anexos
                             existing_dict = {normalize_empenho(row[col_emp_exist]): row for _, row in df_existing.iterrows()}
                             
-                            # Lista final combinada
+                            # Lista final: apenas empenhos ativos da nova planilha (preservando obs/anexo dos que já existiam)
                             final_rows = []
-                            processed_empenhos = set()
 
-                            # 4. Iterar sobre o df de ativos
+                            # 4. Iterar sobre os empenhos ativos do novo upload
                             for _, row_new in df_result_active.iterrows():
                                 emp_val = normalize_empenho(row_new[col_emp_new])
-                                processed_empenhos.add(emp_val)
+                                row_merged = row_new.to_dict()
                                 
                                 if emp_val in existing_dict:
                                     # JÁ EXISTE E ATIVO: Atualiza dados, mas PRESERVA observação antiga e anexo
-                                    row_merged = row_new.to_dict()
                                     old_obs = existing_dict[emp_val].get(col_obs_exist, "")
                                     if old_obs:
                                         row_merged[col_obs_new] = old_obs
@@ -589,25 +587,10 @@ if modo == "Organizador de Planilhas":
                                         old_anexo = existing_dict[emp_val].get(col_anexo_exist, "")
                                         if old_anexo:
                                             row_merged[col_anexo_new] = old_anexo
-                                    final_rows.append(row_merged)
-                                else:
-                                    # NOVO E ATIVO: Adiciona como está
-                                    final_rows.append(row_new.to_dict())
+                                
+                                final_rows.append(row_merged)
                             
-                            # 5. E os que estavam na planilha antiga mas NÃO no upload?
-                            # Preservamos contanto que:
-                            # - Não tenham sido atualizados por um ativo (processed_empenhos)
-                            # - Não estejam nos empenhos zerados do novo upload (empenhos_a_excluir)
-                            # - E não tenham saldo zerado na planilha antiga
-                            for emp_val, row_old in existing_dict.items():
-                                emp_val_clean = normalize_empenho(emp_val)
-                                if emp_val_clean not in processed_empenhos and emp_val_clean not in empenhos_a_excluir:
-                                    # Se a coluna de saldo existir na base antiga, remove se estiver zerado
-                                    if col_saldo_exist:
-                                        saldo_old = row_old.get(col_saldo_exist, "")
-                                        if is_zero_value(saldo_old):
-                                            continue  # Ignora/exclui
-                                    final_rows.append(row_old)
+                            # Nota: Empenhos zerados/pagos (que não estão na lista de ativos) são descartados e limpos do Google Sheets.
 
                             # 6. Salvar de volta
                             df_final = pd.DataFrame(final_rows)
