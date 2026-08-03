@@ -489,7 +489,7 @@ else:
 if modo == "Organizador de Planilhas":
     st.title("📂 Organizador de Planilhas")
     st.markdown("Extrai colunas (D, F, H, J, K, W, AJ), mapeia departamentos e verifica prazos.")
-    st.markdown("O arquivo é o analitico de empenho no formato .xlsx com ponto e virgula de separação e virgula de centavos. De empenhos a pagar")
+    st.markdown("O arquivo é o analitico de empenho no formato .xlsx com ponto e virgula de separação e virgula de centavos. De empenhos a pagar com data iniciando em 01/01/xxxx até a data em que se quer.")
     uploaded_file = st.file_uploader("Carregue a planilha (Excel ou CSV)", type=["xlsx", "xls", "csv"])
 
     if uploaded_file and st.button("Processar e Salvar"):
