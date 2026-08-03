@@ -508,7 +508,9 @@ if modo == "Organizador de Planilhas":
                 
                 # Identificar colunas chaves no novo arquivo
                 col_emp_new = next((c for c in df_result.columns if "empenho" in c.lower()), None)
-                col_saldo_new = next((c for c in df_result.columns if any(x in c.lower() for x in ["saldo", "valor", "pagar"])), None)
+                col_saldo_new = next((c for c in df_result.columns if any(x in c.lower() for x in ["saldo", "pagar"]) and "empenho" not in c.lower()), None)
+                if not col_saldo_new:
+                    col_saldo_new = next((c for c in df_result.columns if "valor" in c.lower() and "empenho" not in c.lower()), None)
                 
                 if not col_emp_new or not col_saldo_new:
                     st.error("Erro: Não foi possível identificar as colunas 'Empenho' ou 'Saldo' no arquivo enviado.")
@@ -554,7 +556,9 @@ if modo == "Organizador de Planilhas":
                         # 2. Identificar coluna de Empenho, Observação e Saldo na base existente
                         col_emp_exist = next((c for c in df_existing.columns if "empenho" in c.lower()), None)
                         col_obs_exist = next((c for c in df_existing.columns if "observação" in c.lower() or "observacao" in c.lower()), None)
-                        col_saldo_exist = next((c for c in df_existing.columns if any(x in c.lower() for x in ["saldo", "valor", "pagar"])), None)
+                        col_saldo_exist = next((c for c in df_existing.columns if any(x in c.lower() for x in ["saldo", "pagar"]) and "empenho" not in c.lower()), None)
+                        if not col_saldo_exist:
+                            col_saldo_exist = next((c for c in df_existing.columns if "valor" in c.lower() and "empenho" not in c.lower()), None)
                         col_obs_new = "Observação" # data_processor garante essa coluna
 
                         if not col_emp_exist:
