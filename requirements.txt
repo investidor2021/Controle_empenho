@@ -5,3 +5,5 @@ google-auth
 xlsxwriter
 openpyxl
 google-api-python-client
+starlette<0.40.0
+
