@@ -491,7 +491,13 @@ else:
 if modo == "Organizador de Planilhas":
     st.title("📂 Organizador de Planilhas")
     st.markdown("Extrai colunas (D, F, H, J, K, W, AJ), mapeia departamentos e verifica prazos.")
-    st.markdown("O arquivo é o analitico de empenho no formato .xlsx com ponto e virgula de separação e virgula de centavos. De empenhos a pagar com data iniciando em 01/01/xxxx até a data em que se quer.")
+    st.markdown(
+        "**Qual arquivo enviar:** relatório **Analítico de Empenho** (CSV com ponto e vírgula de separação e vírgula nos centavos), "
+        "filtrando **empenhos a liquidar**, com data de **01/01/xxxx** até a data desejada.\n\n"
+        "⚠️ Marque a opção **\"Listar Processo Compras do Empenho\"** antes de gerar o relatório — "
+        "sem ela as colunas de pedido/OC (`numeroPedido`, `processoCompra`) vêm vazias e o sistema "
+        "só consegue achar a OC quando ela está escrita no histórico."
+    )
     uploaded_file = st.file_uploader("Carregue a planilha (Excel ou CSV)", type=["xlsx", "xls", "csv"])
 
     if uploaded_file and st.button("Processar e Salvar"):
