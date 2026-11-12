@@ -35,6 +35,48 @@ DEPARTAMENTOS = {
     "05.05.01": "FUNDO DE PREVIDÊNCIA DOS SERVIDORES MUNICIPAIS"
 }
 
+import re
+import unicodedata
+
+# Padrões em ordem de prioridade (Ordem de Compra primeiro).
+# Aplicados sobre texto normalizado (sem acentos, minúsculo, "nº"/"n°" -> "n").
+_NUM = r'(\d{1,6})(?:\s*(?:/|-|\s+de\s+)\s*(\d{4}))?'
+_SEP = r'\s*(?:n\s*\.?|num\.?|numero)?\s*[:.\-]?\s*'
+_PADROES_OC = [
+    re.compile(r'\bordem\s+de\s+compras?' + _SEP + _NUM),
+    re.compile(r'\bo\.?\s?c\.?' + _SEP + _NUM + r'\b'),
+    re.compile(r'\bpedido\s+de\s+compras?' + _SEP + _NUM),
+    re.compile(r'\bprocesso\s+(?:de\s+)?compras?\s*:?\s*pedido' + _SEP + _NUM),
+    re.compile(r'\bpedido\s*(?:n\s*\.?|:)\s*' + _NUM),
+    re.compile(r'\bpedido\s+' + _NUM),
+]
+
+
+def _normalizar_texto(texto):
+    """Remove acentos/lixo de encoding e padroniza 'Nº', 'N°', 'NÂº' para 'n'."""
+    t = str(texto)
+    # Corrige mojibake comum (UTF-8 lido como Latin-1): "Âº" -> "º"
+    t = t.replace('Âº', 'º').replace('Â°', '°').replace('Âª', 'ª')
+    t = t.replace('º', '').replace('°', '').replace('ª', '')
+    t = unicodedata.normalize('NFKD', t).encode('ascii', 'ignore').decode('ascii')
+    return t.lower()
+
+
+def extrair_ordem_compra(texto):
+    """Extrai o número da Ordem de Compra / Pedido de Compra de um texto livre."""
+    if texto is None:
+        return ""
+    t = _normalizar_texto(texto)
+    if not t or t == "nan":
+        return ""
+    for padrao in _PADROES_OC:
+        m = padrao.search(t)
+        if m:
+            numero, ano = m.group(1), m.group(2)
+            return f"{numero}/{ano}" if ano else numero
+    return ""
+
+
 def get_department_name(code):
     """
     Returns the department name based on the code.
@@ -89,9 +131,6 @@ def organize_sheet(file):
             return None, f"Erro: A planilha tem apenas {df.shape[1]} colunas, mas precisamos da coluna AJ (índice 35)."
 
         # Extrair "Pedido de Compra" robustamente (da mesma linha ou da linha de baixo)
-        import re
-        pattern = r'(?:pedido\s*de\s*compra|processo\s*de\s*compra(?:\s*:\s*pedido)?|pedido|ordem\s*de\s*compra|oc)\s*(?:n[ºo\.]|:|\s)*\s*(\d+(?:[/-]\d+)?)\b'
-        
         pedidos_compra = []
         for i in range(len(df)):
             emp_val = str(df.iloc[i, 7]).strip() if df.shape[1] > 7 else ""
@@ -132,9 +171,7 @@ def organize_sheet(file):
                 # 3. Fallback: Procurar no histórico da própria linha por regex
                 if not pedido:
                     hist_val = str(df.iloc[i, 22]).strip() if df.shape[1] > 22 else ""
-                    match = re.search(pattern, hist_val, re.IGNORECASE)
-                    if match:
-                        pedido = match.group(1)
+                    pedido = extrair_ordem_compra(hist_val)
                 
                 # 4. Fallback 2: Procurar em todas as colunas da linha de baixo por regex (se ela não tiver número de empenho)
                 if not pedido and i + 1 < len(df):
@@ -144,9 +181,8 @@ def organize_sheet(file):
                         for col_idx in range(df.shape[1]):
                             cell_val = str(df.iloc[i + 1, col_idx]).strip()
                             if cell_val and cell_val != "nan":
-                                match_next = re.search(pattern, cell_val, re.IGNORECASE)
-                                if match_next:
-                                    pedido = match_next.group(1)
+                                pedido = extrair_ordem_compra(cell_val)
+                                if pedido:
                                     break
                 
                 pedidos_compra.append(pedido)
@@ -220,7 +256,7 @@ def organize_sheet(file):
             col_lower = col.lower()
             
             # Pular colunas de texto/data claras
-            if any(palavra in col_lower for palavra in ['data', 'prazo', 'status', 'departamento', 'observação', 'observacao', 'nome', 'histórico', 'historico', 'atividade', 'tipoempenho']):
+            if any(palavra in col_lower for palavra in ['data', 'prazo', 'status', 'departamento', 'observação', 'observacao', 'nome', 'histórico', 'historico', 'atividade', 'tipoempenho', 'pedido']):
                 continue
                 
             # Pular identificadores/códigos (ex: número do empenho, código do fornecedor)
@@ -324,7 +360,7 @@ def organize_sheet(file):
             col_lower = col.lower()
             
             # Pular colunas que não são monetárias
-            if any(palavra in col_lower for palavra in ['data', 'prazo', 'status', 'departamento', 'observa']):
+            if any(palavra in col_lower for palavra in ['data', 'prazo', 'status', 'departamento', 'observa', 'pedido']):
                 continue
             
             # Pular colunas que são identificadores (números inteiros, não valores monetários)
