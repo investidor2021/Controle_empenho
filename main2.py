@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import uuid
+import re
+import html
 import io
 import time
 import gspread
@@ -1057,19 +1059,20 @@ if st.session_state.usuario: # Só mostra se estiver logado
     else:
         # Cabeçalho da Tabela
         st.markdown("---")
-        # Layout: Emissao(1.0), Empenho(0.7), Cod(0.7), Nome(1.6), Hist(2.5), Valor(0.9), Saldo(0.9), Prazo(0.9), Status(0.9)
-        cols_spec = [1.0, 0.7, 0.7, 1.6, 2.5, 0.9, 0.9, 0.9, 0.9]
+        # Layout: Emissao, Empenho, OC, Cod, Nome, Hist, Valor, Saldo, Prazo, Status
+        cols_spec = [0.9, 0.6, 0.9, 0.6, 1.5, 2.3, 0.9, 0.9, 0.9, 0.9]
         cols = st.columns(cols_spec)
-        
+
         cols[0].markdown("**Emissão**")
         cols[1].markdown("**Emp.**")
-        cols[2].markdown("**Cód.**")
-        cols[3].markdown("**Fornecedor**")
-        cols[4].markdown("**Histórico**")
-        cols[5].markdown("**Valor**")
-        cols[6].markdown("**Saldo a Pagar**")
-        cols[7].markdown("**Prazo**")
-        cols[8].markdown("**Status**")
+        cols[2].markdown("**OC / Pedido**", help="Número da Ordem de Compra. Abaixo aparece de onde ele foi extraído (coluna do sistema ou texto do histórico).")
+        cols[3].markdown("**Cód.**")
+        cols[4].markdown("**Fornecedor**")
+        cols[5].markdown("**Histórico**")
+        cols[6].markdown("**Valor**")
+        cols[7].markdown("**Saldo a Pagar**")
+        cols[8].markdown("**Prazo**")
+        cols[9].markdown("**Status**")
         
         st.markdown("---")
 
@@ -1085,47 +1088,68 @@ if st.session_state.usuario: # Só mostra se estiver logado
                 # 2. Empenho
                 cols[1].write(f"{empenho_val}")
                 
-                # 3. Código Fornecedor
-                cols[2].caption(str(row.get(col_cod_forn, "-")))
-                
-                # 4. Nome Fornecedor
-                cols[3].caption(str(row.get(col_fornecedor, "-")))
-                
-                # 5. Histórico (Scrollable)
-                hist_text = str(row.get(col_historico, "-"))
-                cols[4].markdown(
-                    f"""<div style="height: 50px; overflow-y: auto; font-size: 12px; background-color: rgba(255, 255, 255, 0.05); padding: 5px; border-radius: 4px;">{hist_text}</div>""",
+                # 3. OC / Pedido de Compra + origem
+                pedido_compra = str(row.get("Pedido de Compra", "") or "").strip()
+                if pedido_compra.lower() == "nan":
+                    pedido_compra = ""
+                origem_oc = str(row.get("Origem Pedido", "") or "").strip()
+                if origem_oc.lower() == "nan":
+                    origem_oc = ""
+                if pedido_compra:
+                    cols[2].markdown(
+                        f"""<div style="font-size: 13px; font-weight: 600;">📦 {html.escape(pedido_compra)}</div>"""
+                        f"""<div style="font-size: 10px; opacity: 0.7;">{html.escape(origem_oc or "origem não registrada")}</div>""",
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    cols[2].markdown(
+                        """<div style="font-size: 11px; opacity: 0.5;">sem OC</div>""",
+                        unsafe_allow_html=True,
+                    )
+
+                # 4. Código Fornecedor
+                cols[3].caption(str(row.get(col_cod_forn, "-")))
+
+                # 5. Nome Fornecedor
+                cols[4].caption(str(row.get(col_fornecedor, "-")))
+
+                # 6. Histórico (Scrollable) - destaca o trecho da OC quando veio do histórico
+                hist_html = html.escape(str(row.get(col_historico, "-")))
+                if pedido_compra:
+                    num_oc = html.escape(pedido_compra.split("/")[0])
+                    hist_html = re.sub(
+                        rf"(?<!\d)({re.escape(num_oc)})(?!\d)",
+                        r"<mark style='background-color: #f5c542; color: #000; padding: 0 2px; border-radius: 2px;'>\1</mark>",
+                        hist_html,
+                        count=1,
+                    )
+                cols[5].markdown(
+                    f"""<div style="height: 50px; overflow-y: auto; font-size: 12px; background-color: rgba(255, 255, 255, 0.05); padding: 5px; border-radius: 4px;">{hist_html}</div>""",
                     unsafe_allow_html=True
                 )
-                
-                # 6. Valor Original (Formatado)
+
+                # 7. Valor Original (Formatado)
                 valor_raw = row.get(col_valor, "-") if col_valor else "-"
-                cols[5].caption(format_currency(valor_raw))
-                
-                # 7. Saldo (Formatado)
+                cols[6].caption(format_currency(valor_raw))
+
+                # 8. Saldo (Formatado)
                 saldo_raw = row.get(col_saldo, "-")
-                cols[6].caption(format_currency(saldo_raw))
-    
-                # 8. Prazo
-                cols[7].caption(str(row.get("Prazo (90 dias)", "-")))
-    
-                # 9. Status
+                cols[7].caption(format_currency(saldo_raw))
+
+                # 9. Prazo
+                cols[8].caption(str(row.get("Prazo (90 dias)", "-")))
+
+                # 10. Status
                 status_val = row[col_status]
                 if status_val == "Vencido":
-                    cols[8].error(status_val)
+                    cols[9].error(status_val)
                 elif "Vence em" in str(status_val) or status_val == "Em execução":
-                    cols[8].warning(status_val)
+                    cols[9].warning(status_val)
                 else:
-                    cols[8].success(status_val)
-                    
-                # Linha de baixo: Pedido de Compra, Observação e Anexo
-                col_sub1, col_sub2, col_sub3 = st.columns([2.5, 6.0, 2.5])
-                
-                pedido_compra = row.get("Pedido de Compra", "")
-                if pedido_compra and str(pedido_compra).strip() != "" and str(pedido_compra).strip().lower() != "nan":
-                    col_sub1.markdown(f"📦 **Pedido de Compra:** {pedido_compra}")
-                else:
-                    col_sub1.markdown("")
+                    cols[9].success(status_val)
+
+                # Linha de baixo: Observação e Anexo
+                col_sub2, col_sub3 = st.columns([8.5, 2.5])
                     
                 obs_key = f"obs_{empenho_val}_ext"
                 obs_val = row.get(col_obs, "") if col_obs else ""

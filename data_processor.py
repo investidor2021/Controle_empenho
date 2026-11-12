@@ -132,10 +132,12 @@ def organize_sheet(file):
 
         # Extrair "Pedido de Compra" robustamente (da mesma linha ou da linha de baixo)
         pedidos_compra = []
+        origens_pedido = []
         for i in range(len(df)):
             emp_val = str(df.iloc[i, 7]).strip() if df.shape[1] > 7 else ""
             if emp_val and emp_val != "nan" and emp_val != "":
                 pedido = ""
+                origem = ""
                 # 1. Tentar pegar das colunas dedicadas na própria linha (coluna 38/index 37 = numeroPedido, coluna 37/index 36 = anoPedido)
                 num_ped = str(df.iloc[i, 37]).strip() if df.shape[1] > 37 else ""
                 ano_ped = str(df.iloc[i, 36]).strip() if df.shape[1] > 36 else ""
@@ -150,6 +152,7 @@ def organize_sheet(file):
                         pedido = f"{num_ped}/{ano_ped}"
                     else:
                         pedido = num_ped
+                    origem = "Sistema (numeroPedido)"
                 
                 # 2. Se não achou na própria linha, verificar a linha de baixo (i+1) nas mesmas colunas (se ela não tiver número de empenho)
                 if not pedido and i + 1 < len(df):
@@ -167,11 +170,14 @@ def organize_sheet(file):
                                 pedido = f"{num_ped_next}/{ano_ped_next}"
                             else:
                                 pedido = num_ped_next
+                            origem = "Sistema (linha abaixo)"
                 
                 # 3. Fallback: Procurar no histórico da própria linha por regex
                 if not pedido:
                     hist_val = str(df.iloc[i, 22]).strip() if df.shape[1] > 22 else ""
                     pedido = extrair_ordem_compra(hist_val)
+                    if pedido:
+                        origem = "Histórico do empenho"
                 
                 # 4. Fallback 2: Procurar em todas as colunas da linha de baixo por regex (se ela não tiver número de empenho)
                 if not pedido and i + 1 < len(df):
@@ -183,11 +189,14 @@ def organize_sheet(file):
                             if cell_val and cell_val != "nan":
                                 pedido = extrair_ordem_compra(cell_val)
                                 if pedido:
+                                    origem = "Linha abaixo do empenho"
                                     break
                 
                 pedidos_compra.append(pedido)
+                origens_pedido.append(origem)
             else:
                 pedidos_compra.append("")
+                origens_pedido.append("")
                 
         df["Pedido de Compra"] = pedidos_compra
 
@@ -200,6 +209,7 @@ def organize_sheet(file):
         
         # Associar o "Pedido de Compra" mapeado para o index correto
         result_df["Pedido de Compra"] = [pedidos_compra[idx] for idx in result_df.index]
+        result_df["Origem Pedido"] = [origens_pedido[idx] for idx in result_df.index]
         
         # Filtrar para manter apenas as linhas com empenho válido (ignorar sub-linhas vazias após extrair os dados delas)
         col_emp_temp = next((c for c in result_df.columns if "empenho" in c.lower()), None)
